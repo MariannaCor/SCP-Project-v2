@@ -3,7 +3,7 @@ import org.apache.spark.sql.functions._
 
 import scala.collection.{GenSeq, mutable}
 import scala.math.log
-
+/*
 class Sorting2(xs: Array[SimpleTuple], maxDepth: Int ) extends Serializable {
 
   def parMergeSort(): Unit = {
@@ -38,15 +38,6 @@ class Sorting2(xs: Array[SimpleTuple], maxDepth: Int ) extends Serializable {
     }
 
   private def quickS(xs: Array[SimpleTuple], from: Int, until: Int) = {
-    // create an array of random 10000 random ints
-    val r = scala.util.Random
-    val randomArray = (for (i <- 1 to 1000) yield r.nextInt(100000)).toArray
-
-    // do the sorting
-    val sortedArray = quickSort(randomArray)
-
-    // print the ordered array
-    sortedArray.foreach(println)
 
     // the quicksort recursive algorithm
     def quickSort(xs: Array[SimpleTuple]): Array[SimpleTuple] = {
@@ -93,4 +84,4 @@ class Sorting2(xs: Array[SimpleTuple], maxDepth: Int ) extends Serializable {
   }
 */
 
-}
+}*/
