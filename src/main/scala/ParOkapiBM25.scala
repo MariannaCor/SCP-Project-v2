@@ -38,7 +38,7 @@ def calcAvgDocs(pagesLenght: DataFrame): Double = {
 }
 
 
-def getBM25() = {
+def getBM25() : List[SimpleTuple] = {
 
   var templist = mutable.MutableList[(String, Int)]()
 

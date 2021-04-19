@@ -10,10 +10,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8180e5b5-457a-481a-ad13-34cc5c3d1ec0" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/test/scala/DataPreProcessing.scala" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/test/scala/ParOkapiBM25.scala" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/test/scala/Sorting.scala" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/scala/ParOkapiBM25.scala" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/scala/ParOkapiBM25.scala" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/scala/ServiceMain.scala" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/scala/ServiceMain.scala" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/scala/Sorting.scala" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/scala/Sorting.scala" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,6 +31,14 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitSEFilterConfiguration">
+    <file-type-list>
+      <filtered-out-file-type name="LOCAL_BRANCH" />
+      <filtered-out-file-type name="REMOTE_BRANCH" />
+      <filtered-out-file-type name="TAG" />
+      <filtered-out-file-type name="COMMIT_BY_MESSAGE" />
+    </file-type-list>
   </component>
   <component name="MavenImportPreferences">
     <option name="generalSettings">
@@ -50,7 +59,8 @@
   <component name="PropertiesComponent">
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/src/main/scala" />
     <property name="project.structure.last.edited" value="Artifacts" />
     <property name="project.structure.proportion" value="0.14941406" />
     <property name="project.structure.side.proportion" value="0.21034482" />
@@ -59,6 +69,9 @@
     <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\unibo-installations\SCP-Project\SCP-Project\src\main\scala" />
+    </key>
     <key name="CopyClassDialog.RECENTS_KEY">
       <recent name="" />
     </key>
@@ -142,5 +155,6 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
 </project>

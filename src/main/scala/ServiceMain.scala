@@ -4,9 +4,8 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
 
+
 object ServiceMain {
-
-
 
 
   def ReadXMLLocalFile(spark: SparkSession, xmlFile: String): DataFrame = {
@@ -62,7 +61,8 @@ object ServiceMain {
     //println("ordered list of documents with score ")
 
     spark.sparkContext.parallelize(scores).coalesce(1).saveAsTextFile("s3://sal1/result")
-    //msort(scores.toList) map( i => println( "- "+i) )
+    //parMergeSort
+   // (scores.toList) map( i => println( "- "+i) )
 
   }
 

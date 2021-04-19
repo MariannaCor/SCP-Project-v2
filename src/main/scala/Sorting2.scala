@@ -1,14 +1,12 @@
-class Sorting {
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions._
 
-  def main(args: Array[String]): Unit = {
-    var myarr = new Array[SimpleTuple]( 3 )
-    myarr = Array ( SimpleTuple ( 1, 3.45 ), SimpleTuple ( 2, 4.65 ), SimpleTuple ( 3, 7.68 ) )
+import scala.collection.{GenSeq, mutable}
+import scala.math.log
 
-    parMergeSort(myarr, 3);
-  }
+class Sorting2(xs: Array[SimpleTuple], maxDepth: Int ) extends Serializable {
 
-
-  def parMergeSort(xs: Array[SimpleTuple], maxDepth: Int): Unit = {
+  def parMergeSort(): Unit = {
     val ys = new Array[SimpleTuple](xs.length)
 
     def sort(from: Int, until: Int, depth: Int): Unit = {
@@ -27,22 +25,25 @@ class Sorting {
 
   }
 
-  private def merge(xs: List[SimpleTuple], ys: List[SimpleTuple]): Array[SimpleTuple] =
-  xs match {
-    case Nil => ys
-    case x :: xs1 =>
-      ys match {
-        case Nil => xs
-        case y :: ys1 =>
-          if( x.value > y.value ) x :: merge ( xs1, ys )
-          else y :: merge ( xs, ys1 )
-      }
-  }
+  private def merge(xs: Array[SimpleTuple], ys: Array[SimpleTuple]): Array[SimpleTuple] =
+    xs match {
+      case Nil => ys
+      case x :: xs1 =>
+        ys match {
+          case Nil => xs
+          case y :: ys1 =>
+            if( x.value > y.value ) x :: merge ( xs1, ys )
+            else y :: merge ( xs, ys1 )
+        }
+    }
 
   private def quickS(xs: Array[SimpleTuple], from: Int, until: Int) = {
+    // create an array of random 10000 random ints
+    val r = scala.util.Random
+    val randomArray = (for (i <- 1 to 1000) yield r.nextInt(100000)).toArray
 
     // do the sorting
-    val sortedArray = quickSort(xs)
+    val sortedArray = quickSort(randomArray)
 
     // print the ordered array
     sortedArray.foreach(println)
@@ -53,9 +54,9 @@ class Sorting {
       else {
         val pivot = xs(xs.length / 2)
         Array.concat(
-          quickSort(xs filter (pivot > _.value)),
-          xs filter (pivot == _.value),
-          quickSort(xs filter (pivot < _.value)))
+          quickSort(xs filter (pivot > _)),
+          xs filter (pivot == _),
+          quickSort(xs filter (pivot < _)))
       }
     }
   }
