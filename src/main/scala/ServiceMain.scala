@@ -1,3 +1,5 @@
+import java.util.Comparator
+
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
@@ -116,4 +118,9 @@ object ServiceMain {
 
 }
 
-case class SimpleTuple(idOfTheDoc: Long , value: Double);
+case class SimpleTuple(idOfTheDoc: Long , value: Double){
+  override def toString: String = this.idOfTheDoc+",\t"+this.value ;
+  def compareTo(x: SimpleTuple) = this.value-x.value
+}
+
+
