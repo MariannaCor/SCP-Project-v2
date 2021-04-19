@@ -1,5 +1,6 @@
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SparkSession}
+
 import scala.collection.{GenSeq, mutable}
 import scala.math.log
 
