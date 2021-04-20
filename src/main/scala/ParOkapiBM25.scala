@@ -38,7 +38,7 @@ def calcAvgDocs(pagesLenght: DataFrame): Double = {
 }
 
 
-def getBM25() : List[SimpleTuple] = {
+def getBM25() : Array[SimpleTuple] = {
 
   var templist = mutable.MutableList[(String, Int)]()
 
@@ -92,7 +92,7 @@ def getBM25() : List[SimpleTuple] = {
             0;
         }).reduce( _ + _ )
         SimpleTuple( id, score )
-      }).toList
+    }).toArray
 
   scores
 

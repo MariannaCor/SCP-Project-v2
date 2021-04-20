@@ -1,3 +1,5 @@
+import scala.reflect.io.Directory
+import java.io.File
 import java.util.Comparator
 
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
@@ -57,20 +59,26 @@ object ServiceMain {
   * */
 
 
-  def block_of_code(preProcessedDB: DataFrame, myQuery: Array[String], spark: SparkSession): Unit = {
+  def block_of_code(preProcessedDB: DataFrame, myQuery: Array[String], sc: SparkContext): Unit = {
     val okapi = new ParOkapiBM25(preProcessedDB,myQuery, preProcessedDB.count() )
     val scores =  okapi.getBM25()
     //println("ordered list of documents with score ")
-
-    spark.sparkContext.parallelize(scores).coalesce(1).saveAsTextFile("s3://sal1/result")
+    Sorting.parMergeSort(scores,0);
+    //var path = "s3://sal1/result"
+    var path = "output"
     //parMergeSort
-   // (scores.toList) map( i => println( "- "+i) )
+    //scores reverseMap(  println(_)  )
+
+    val directory = new Directory(new File("./output"))
+    directory.deleteRecursively()
+
+    sc.parallelize(scores).coalesce(1).saveAsTextFile(path)
 
   }
 
 
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf ().setAppName ( this.getClass.getName )//.setMaster ( "local[*]" )
+    val conf = new SparkConf ().setAppName ( this.getClass.getName ).setMaster ( "local[*]" )
     val spark: SparkSession = SparkSession.builder.config ( conf ).getOrCreate ()
     spark.sparkContext.setLogLevel ( "WARN" )
     val sc = spark.sqlContext.sparkContext
@@ -100,7 +108,7 @@ object ServiceMain {
     var queryKeyword = dbQuery.select("words_clean").collect()
     val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
 
-    time ( block_of_code(preProcessedDB,myQuery,spark) )
+    time ( block_of_code(preProcessedDB,myQuery,sc) )
 
   }
 

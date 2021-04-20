@@ -5,7 +5,7 @@ import utils.primitives
 
 object Sorting {
 
-  def main(args: Array[String]): Unit = {
+  /*def main(args: Array[String]): Unit = {
     //var myarr = new Array[SimpleTuple]( 15 )
     //myarr = A// SimpleTuple ( 1, 3.45 ), SimpleTuple ( 2, 4.65 ), SimpleTuple ( 3, 7.68 ) )
 
@@ -22,7 +22,7 @@ object Sorting {
     println("array ordinato ")
     myarr.take(100).map( x=> println(x))
 
-  }
+  }*/
 
   def time[R](block: => R): R = {
 
