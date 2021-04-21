@@ -1,18 +1,24 @@
-import scala.reflect.io.Directory
-import java.io.File
-import java.util.Comparator
+import org.apache.spark.sql.functions.{col, explode}
 
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
+
 import scala.collection.mutable
+
+//DONE: pre processing db con flag.
+//TODO: persist su parOkapi. (S&M)
+//TODO: sync su parOkapi. (S&M)
+//TODO: data pre processing versione RDD.(M)
+//TODO: rinominare il file. (S)
+//TODO: 1. sorting decrescente e take n 2. output finale con titolo e testo dei primi n file trovati. (S)
+//DONE: lettura del DB da file s3.
 
 
 object ServiceMain {
 
-
-  def ReadXMLLocalFile(spark: SparkSession, xmlFile: String): DataFrame = {
+/*
+  def ReadXMLfromS3(spark: SparkSession, xmlFile: String): DataFrame = {
 
     val revisionStruct = StructType(
       StructField("text", StringType, true) :: Nil)
@@ -20,17 +26,18 @@ object ServiceMain {
     val schema = StructType(
       StructField("title", StringType, true) ::
         StructField("id", IntegerType, false) ::
-        StructField("revision.text", StringType, false) :: Nil)
+        StructField("revision", revisionStruct, true) :: Nil)
 
-    val df = spark.sqlContext.read.format("com.databricks.spark.xml")
+    val df = spark.read.format("com.databricks.spark.xml")
       .option("rootTag", "mediawiki")
       .option("rowTag", "page")
-      //.schema(schema)
-      .load(xmlFile)
+      .schema(schema)
+      .xml(xmlFile)
 
-    df.select("title", "id", "revision")
+    df.selectExpr("id", "title", "revision.text")
 
   }
+*/
 
   def preProcessOfData(spark: SparkSession) = {
 
@@ -65,61 +72,101 @@ object ServiceMain {
     //println("ordered list of documents with score ")
     Sorting.parMergeSort(scores,0);
     //var path = "s3://sal1/result"
-    var path = "output"
     //parMergeSort
     //scores reverseMap(  println(_)  )
 
-    val directory = new Directory(new File("./output"))
-    directory.deleteRecursively()
-
-    sc.parallelize(scores).coalesce(1).saveAsTextFile(path)
+    sc.parallelize(scores).coalesce(1).saveAsTextFile("s3://scpmarysal/eccoIl30/")
 
   }
 
 
+  def readFullDBFromJson(path : String , spark : SparkSession) : DataFrame = {
+    val dfDB = spark.read
+      .option("multiline", "true")
+      .json(path)
+
+    val arrDB = dfDB.selectExpr("mediawiki.page")
+    arrDB.withColumn("page", explode(col("page"))).selectExpr("page.id", "page.revision.text.__text")
+  }
+
+  def readPreprocessedDBFromJson(path : String , spark : SparkSession) : DataFrame = {
+    val dfDB = spark.read
+      .json(path)
+
+    dfDB
+  }
+
+
+  /*
+  *  -preprocess false/true keywords
+  *
+  * */
+
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf ().setAppName ( this.getClass.getName ).setMaster ( "local[*]" )
+    val conf = new SparkConf ().setAppName ( this.getClass.getName )
     val spark: SparkSession = SparkSession.builder.config ( conf ).getOrCreate ()
     spark.sparkContext.setLogLevel ( "WARN" )
     val sc = spark.sqlContext.sparkContext
+    var wikiDF : DataFrame = null
 
+    /* id, text*/
+    var wikiText : DataFrame = null
 
-    val testSenteces3 = Seq(
-      // (0, "Logistic: regression, models, are, neat."),
-      (1, "Hi I heard about Spark and I think Spark is beautiful"),
-      (2, "Java is Java, Spark is Spark and NoSQL is not SQL"),
-      (3, "Logistic: regression, models, are, neat, spark.") //java spark models
-    )
-    val myRdd = sc.parallelize(testSenteces3)
+    //SPLIT ARGS
+    val splittedArgs = args.splitAt(2)
 
-    myRdd.foreach(println(_))
-    //utente inserisce la query
-    //ritorno i 10 doc più rilevanti. Conviene fare un insertion sort, man mano che scorro i documenti e poi una lettura.
+    /* JSON TO DF  */
+    splittedArgs._1(1) match {
+      case "false" => {
+        // READ PREPROCESSED DB
+        wikiDF = readPreprocessedDBFromJson("s3://scpmarysal/preProcessedDB/wikiclean.json", spark)
 
-    val preProcessedDB = preProcessOfData(spark)
+      }
+      case "true" => {
+        wikiDF = readFullDBFromJson("s3://scpmarysal/wikidb.json", spark)
 
-      //PROCESS QUERY
-    Console.out.println( "Search something or digit exit to quit:" )
-    val userInput = args.reduce((x,y) => x + " " + y)
+        //PREPROCESS FULL DB
+        val preProcessData = new DataPreProcessing(wikiDF)
+        val preProcessedDB = preProcessData.preProcessDF()
 
-    val query = Seq( (0, "Query", userInput) )
-    val queryDF = spark.createDataFrame( query ).toDF( "id", "title", "text" )
+        //WRITE PREPROCESSED DB TO A FILE
+        preProcessedDB.write
+          .mode("overwrite")
+          .format("json")
+          .save("s3://scpmarysal/preProcessedDB")
+      }
+    }
+
+    val userInput = splittedArgs._2.reduce((x,y) => x + " " + y)
+
+    val query = Seq( (0, userInput) )
+    val queryDF = spark.createDataFrame( query ).toDF( "id", "__text" )
     val dbQuery = new DataPreProcessing( queryDF ).preProcessDF()
-    var queryKeyword = dbQuery.select("words_clean").collect()
+    val queryKeyword = dbQuery.select("words_clean").collect()
     val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
 
-    time ( block_of_code(preProcessedDB,myQuery,sc) )
+    time ( block_of_code(wikiDF,myQuery,sc) , spark )
 
   }
 
 
-  def time[R](block: => R): R = {
+  def time[R](block: => R, spark : SparkSession): R = {
 
     val t0 = System.nanoTime()
     val result = block    // call-by-name
     val t1 = System.nanoTime()
-    Console.out.println("Elapsed time: " + (t1 - t0)/1000000 + "ms")
-    Console.out.println("Elapsed time: " + (t1 - t0)/1000000000 + "sec")
+
+    val testSenteces3 = Seq(
+      (1, "Elapsed time: " + (t1 - t0)/1000000 + "ms"),
+      (2, "Elapsed time: " + (t1 - t0)/1000000000 + "sec"),
+    )
+
+    val sentence2DataFrame = spark.createDataFrame(testSenteces3).toDF("id", "text")
+
+    sentence2DataFrame.coalesce(1).write
+      .mode("overwrite")
+      .format("json")
+      .save("s3://scpmarysal/timeOutput/")
 
     result
   }
@@ -131,4 +178,28 @@ case class SimpleTuple(idOfTheDoc: Long , value: Double){
   def compareTo(x: SimpleTuple) = this.value-x.value
 }
 
+/*
+*
+*
+* def ReadXMLLocalFile(spark: SparkSession, xmlFile: String): DataFrame = {
 
+ val revisionStruct = StructType(
+StructField("text", StringType, true) :: Nil)
+
+ val schema = StructType(
+StructField("title", StringType, true) ::
+StructField("id", IntegerType, false) ::
+StructField("revision.text", StringType, false) :: Nil)
+
+ val df = spark.sqlContext.read.format("com.databricks.spark.xml")
+.option("rootTag", "mediawiki")
+.option("rowTag", "page")
+//.schema(schema)
+.load(xmlFile)
+
+ df.select("title", "id", "revision")
+
+ }
+*
+*
+* */

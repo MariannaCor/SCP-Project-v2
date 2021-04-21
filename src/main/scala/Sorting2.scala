@@ -1,8 +1,10 @@
+/*
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 
 import scala.collection.{GenSeq, mutable}
 import scala.math.log
+*/
 /*
 class Sorting2(xs: Array[SimpleTuple], maxDepth: Int ) extends Serializable {
 

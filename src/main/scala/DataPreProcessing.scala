@@ -17,7 +17,7 @@ class DataPreProcessing( private var df: DataFrame )  {
 
   //return sentenceDF_clean
   private def removePuntuaction() : DataFrame = {
-    df.select(col("id"), lower(regexp_replace(col("text"), "[^a-zA-Z\\s]", "")).alias("text"))
+    df.select(col("id"), lower(regexp_replace(col("__text"), "[^a-zA-Z\\s]", "")).alias("text"))
   }
 
   private def tokenize(df: DataFrame) : DataFrame = {
