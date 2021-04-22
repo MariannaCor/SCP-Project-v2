@@ -5,6 +5,7 @@ import utils.primitives
 
 object Sorting {
 
+  /*
   def main(args: Array[String]): Unit = {
     //var myarr = new Array[SimpleTuple]( 15 )
     //myarr = A// SimpleTuple ( 1, 3.45 ), SimpleTuple ( 2, 4.65 ), SimpleTuple ( 3, 7.68 ) )
@@ -29,6 +30,7 @@ object Sorting {
 
     result
   }
+*/
 
   /* it returns true if the array is ordered from higher to lower value */
   def checkSoundness(myarr: Array[SimpleTuple]): Boolean = {

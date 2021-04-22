@@ -1,3 +1,8 @@
+import com.amazonaws.{AmazonServiceException, SdkClientException}
+import com.amazonaws.auth.profile.ProfileCredentialsProvider
+import com.amazonaws.regions.Regions
+import com.amazonaws.services.s3.AmazonS3ClientBuilder
+import com.amazonaws.services.s3.model.{ListObjectsRequest, PutObjectRequest}
 import org.apache.spark.sql.functions.{col, explode}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
@@ -9,8 +14,8 @@ import scala.collection.parallel.mutable.ParArray
 //TODO: persist su parOkapi. (S&M)
 //TODO: sync su parOkapi. (S&M)
 //TODO: data pre processing versione RDD.(M)
-//TODO: rinominare il file programmaticamente. (S) ...
-//TODO: 1. sorting decrescente e take n 2.(DONE) output finale con titolo e testo dei primi n file trovati. (S) (DONE)
+//DONE: rinominare il file programmaticamente.
+//DONE: 1. sorting decrescente e take n 2.(DONE) output finale con titolo e testo dei primi n file trovati. (S) (DONE)
 //DONE: lettura del DB da file s3.
 
 
@@ -118,13 +123,13 @@ object ServiceMain {
 
     val arrDB = dfDB.selectExpr("mediawiki.page")
 
-    var arrDF = new Array[DataFrame](2)
+    val arrDF = new Array[DataFrame](2)
 
-    arrDF(0) = arrDB.withColumn("page", explode(col("page"))).selectExpr("page.id", "page.revision.text.__text")
-    arrDF(1) = arrDB.withColumn("page", explode(col("page"))).selectExpr("page.id", "page.title")
+    val tmpDF = arrDB.withColumn("page", explode(col("page")))
+    arrDF(0) = tmpDF.selectExpr("page.id", "page.revision.text.__text")
+    arrDF(1) = tmpDF.selectExpr("page.id", "page.title")
 
     arrDF
-
   }
 
   def readPreprocessedDBFromJson(path : String , spark : SparkSession) : DataFrame = {
@@ -142,12 +147,12 @@ object ServiceMain {
   * */
 
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf ().setAppName ( this.getClass.getName ).setMaster("local[*]")
+    val conf = new SparkConf ().setAppName ( this.getClass.getName )
     val spark: SparkSession = SparkSession.builder.config ( conf ).getOrCreate ()
     spark.sparkContext.setLogLevel ( "WARN" )
     val sc = spark.sqlContext.sparkContext
-    var wikiDF : DataFrame = null
 
+    var wikiDF : DataFrame = null
 
     /* id, text*/
     var wikiText : DataFrame = null
@@ -159,7 +164,7 @@ object ServiceMain {
     splittedArgs._1(1) match {
       case "false" => {
         // READ PREPROCESSED DB
-        wikiDF = readPreprocessedDBFromJson("s3://scpmarysal/preProcessedDB/wikiclean.json", spark)
+        wikiDF = readPreprocessedDBFromJson("s3://scpmarysal/wikiclean.json", spark)
       }
       case "true" => {
         //val path = "s3://scpmarysal/"
@@ -172,13 +177,16 @@ object ServiceMain {
         val preProcessData = new DataPreProcessing(wikiDF)
         val preProcessedDB = preProcessData.preProcessDF()
 
+        metaInfDF.write.mode("overwrite").format("json").save(path+"metaInfDB")
 
-        metaInfDF.write.mode("overwrite").format("json").save(path+"salvo-output\\")
         //WRITE PREPROCESSED DB TO A FILE
         preProcessedDB.write
           .mode("overwrite")
           .format("json")
           .save("s3://scpmarysal/preProcessedDB")
+
+        //RENAME DB FILE
+        renameDBFile()
       }
 
       case _ => throw new IllegalArgumentException("no boolean param has been used for -preprocess command")
@@ -218,35 +226,79 @@ object ServiceMain {
     result
   }
 
+
+  def renameDBFile() : Unit = {
+
+    val clientRegion = "us-east-1"
+    val bucketName = "scpmarysal"
+
+    val s3= AmazonS3ClientBuilder.standard.withRegion(clientRegion).build
+
+    val x = s3.listObjectsV2(bucketName, "preProcessedDB/")
+    val y = x.getObjectSummaries()
+    y.forEach( r => {
+      if (r.getKey.contains("part-"))
+        s3.copyObject(bucketName, r.getKey,bucketName, "wikiclean.json")
+        s3.deleteObject(bucketName,  r.getKey)
+    })
+
+    /*
+    val req = new PutObjectRequest("scpmarysal", "test", "test.json")
+    s3.putObject(req)
+*/
+
+    /*
+    s3.putObject("scpmarysal", "test", "test.json")
+    s3.copyObject("scpmarysal", "test", "scpmarysal", "test2")
+    s3.deleteObject("scpmarysal", "test")
+
+    val clientRegion = Regions.DEFAULT_REGION
+    val bucketName = "scpmarysal"
+
+    try {
+      val s3Client = AmazonS3ClientBuilder.standard.withRegion(clientRegion).build
+      // Get a list of objects in the bucket, two at a time, and
+      // print the name and size of each object.
+      val listRequest = new ListObjectsRequest().withBucketName(bucketName)
+      var objects = s3Client.listObjects(listRequest)
+      while ( {
+        true
+      }) {
+        val summaries = objects.getObjectSummaries
+        summaries.forEach(summary => {
+          val testSenteces3 = Seq(
+            (1, s"Object ${summary.getKey} retrieved with size ${summary.getSize} \n")
+          )
+
+          val sentence2DataFrame = spark.createDataFrame(testSenteces3).toDF("id","text")
+
+          sentence2DataFrame.coalesce(1).write
+            .mode("overwrite")
+            .format("json")
+            .save("s3://scpmarysal/awsTestOutput/")
+        }
+
+        )
+
+        if (objects.isTruncated) objects = s3Client.listNextBatchOfObjects(objects)
+      }
+    } catch {
+      case e: AmazonServiceException =>
+        // The call was transmitted successfully, but Amazon S3 couldn't process
+        // it, so it returned an error response.
+        e.printStackTrace()
+      case e: SdkClientException =>
+        // Amazon S3 couldn't be contacted for a response, or the client
+        // couldn't parse the response from Amazon S3.
+        e.printStackTrace()
+    }
+*/
+  }
+
+
 }
 
 case class SimpleTuple(idOfTheDoc: Long , value: Double){
   override def toString: String = this.idOfTheDoc+",\t"+this.value ;
   def compareTo(x: SimpleTuple) = this.value-x.value
 }
-
-/*
-*
-*
-* def ReadXMLLocalFile(spark: SparkSession, xmlFile: String): DataFrame = {
-
- val revisionStruct = StructType(
-StructField("text", StringType, true) :: Nil)
-
- val schema = StructType(
-StructField("title", StringType, true) ::
-StructField("id", IntegerType, false) ::
-StructField("revision.text", StringType, false) :: Nil)
-
- val df = spark.sqlContext.read.format("com.databricks.spark.xml")
-.option("rootTag", "mediawiki")
-.option("rowTag", "page")
-//.schema(schema)
-.load(xmlFile)
-
- df.select("title", "id", "revision")
-
- }
-*
-*
-* */
