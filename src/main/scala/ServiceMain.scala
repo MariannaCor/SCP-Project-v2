@@ -1,9 +1,10 @@
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
-import org.apache.spark.sql.functions.{col, explode}
+import org.apache.spark.sql.functions.{coalesce, col, explode}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
+import scala.collection.parallel.mutable.ParArray
 
 //DONE: pre processing db con flag.
 //TODO: persist su parOkapi. (S&M)
@@ -17,20 +18,21 @@ import scala.collection.mutable
 object ServiceMain {
 
   // LOCAL MARY
+/*  val path = ""
+  val pathWikiClean = "wikiclean.json"
+  val pathIdTitleTextDB = "idTitleTextDB.json"
+  val pathWikiDB = "wikidb.json"
+  val pathOutput = "outputTests/"
+*/
+
+  // LOCAL SAL
   val path = ""
   val pathWikiClean = "wikiclean.json"
   val pathIdTitleTextDB = "idTitleTextDB.json"
   val pathWikiDB = "wikidb.json"
   val pathOutput = "outputTests/"
 
-  /*
-  // LOCAL SAL
-  val path = ""
-  val pathWikiclean = ""
-  val pathWikiDB = ""
-  val pathTitleDB = ""
-  val pathOutput = ""
-  */
+
 
   /*
   //AWS
@@ -72,112 +74,30 @@ object ServiceMain {
   *   quindi ogni volta che creiamo un dataframe è un RDD.
   *
   * */
+  def generateOutput(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
+    val df = idTitleTextDB.collect().par
+    val mapsource = source.map( x=> (x.idOfTheDoc, x.value) ).toMap.par
 
-  /*
-  def generateOutput(textDB: DataFrame, titleDB: DataFrame , source: Array[SimpleTuple], sparkSession: SparkSession): Array[(Int, Double, String, String)] = {
-
-    val texts = textDB.collect().par
-    val titles = titleDB.collect().par
-
-    val temp = for {
-      field <- source.par
-      index = titles.indexOf(field.idOfTheDoc)
-    } yield {
-      if( index > -1 ) {
-        (field.idOfTheDoc, field.value, titles(index).getString(1))
-      }else{
-        (0, 0.0, "")
-      }
-    }
-
-    val temp: ParArray[(Int,Double,String)] = titles
-      .map { field => val id = field.getInt ( 0 ); (field, id) }
-      .map { case (field, id) => val index = source.indexOf ( id ); (field, id, index) }
-      .map { case (field, id, index) =>
-        if( index > -1 ) {
-        (id, source ( index ).value, field.getString ( 1 ))
-        }else{
-          (0, 0.0, "")
-        }
-      } //se non metto un else non torna lo stesso tipo, torna una volta la tripla una volta UNIT e quindi il primo padre fra i due è ANY
-
-
-   val result = for{
-     elem <- temp.filterNot( x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" } )
-     id = elem._1;
-     index = texts.indexOf(id)
+    val res = for{
+     row <-df
+     idDF = row(1).toString.toLong
+     pair <- mapsource
+     idS = pair._1
    }yield{
-     if(index > -1) (id, elem._2, elem._3, texts(index).toString() ) else (0,0.0,"","")
-   } //non è chiaro perchè torna tipo ANY e non la tripla creata
-
-    result.filterNot(
-      x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" }
-    ).toArray
-  }
-
-   */
-
-  /*
-  def generateParSource(textDB: DataFrame, titleDB: DataFrame , source: Array[SimpleTuple], sparkSession: SparkSession) = {
-
-    val texts = textDB.collect().par
-    val titles = titleDB.collect().par
-
-    val temp = for {
-      field <- source.par
-      index = titles.indexOf(field.idOfTheDoc)
-    } yield {
-      if( index > -1 ) {
-        (field.idOfTheDoc, field.value, titles(index).getString(1))
-      }else{
-        (0, 0.0, "")
+      synchronized{
+        if ( idDF == idS) {
+          (idS, pair._2 ,row(2).toString, row(0).toString )
+        }else{
+          (0,0.0,"","")
+        }
       }
-    }
+   }
 
-    val result = for{
-      elem <- temp.filterNot( x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" } )
-      id = elem._1;
-      index = texts.indexOf(id)
-    }yield{
-      if(index > -1) (id, elem._2, elem._3, texts(index).toString() ) else (0,0.0,"","")
-    } //non è chiaro perchè torna tipo ANY e non la tripla creata
 
-    result.filterNot(
-      x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" }
-    ).toArray
+   val x = res.filterNot( x => x == (0,0.0,"","") );
+    x
   }
 
-  def generateParTitles(textDB: DataFrame, titleDB: DataFrame , source: Array[SimpleTuple], sparkSession: SparkSession) = {
-
-    val texts = textDB.collect().par
-    val titles = titleDB.collect().par
-
-    val sourceMap = source.map( el => {
-      (el.idOfTheDoc,el.value)
-    }).toMap
-
-    val temp: ParArray[(Int,Double,String)] = for{
-      field <- titles
-      id = field.getString(0).toInt
-      value = sourceMap.getOrElse(id , 0.0 )
-    } yield {
-      (id, value, field.getString ( 1 ))
-    }//se non metto un else non torna lo stesso tipo, torna una volta la tripla una volta UNIT e quindi il primo padre fra i due è ANY
-
-
-    val result = for{
-      elem <- temp.filterNot( x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" } )
-      id = elem._1;
-      index = texts.indexOf(id)
-    }yield{
-      if(index > -1) (id, elem._2, elem._3, texts(index).toString() ) else (0,0.0,"","")
-    } //non è chiaro perchè torna tipo ANY e non la tripla creata
-
-    result.filterNot(
-      x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" }
-    ).toArray
-  }
-*/
   def generateParDF(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
 
     /* TEMPO DI ESECUZIONE di questa FUNZIONE
@@ -193,19 +113,22 @@ object ServiceMain {
   def block_of_code(tokenizedPreprocessedDB: DataFrame, idTitleTextDB: DataFrame, myQuery: Array[String], sc: SparkContext, sparkSession: SparkSession): Unit = {
 
     val okapi = new ParOkapiBM25(tokenizedPreprocessedDB, myQuery, tokenizedPreprocessedDB.count())
-
     val scores = okapi.getBM25()
     Sorting.parMergeSort(scores, 2);
 
     val n = 10
     lazy val firstN: Array[SimpleTuple] = scores.take(n);
-
     lazy val result = generateParDF(idTitleTextDB, firstN, sparkSession)
+
+    //lazy val result = generateOutput(idTitleTextDB, firstN, sparkSession).seq
+    //sc.parallelize(result).coalesce(1).saveAsTextFile("outputTests/output");
 
     result.coalesce(1).write
       .mode("overwrite")
       .format("json")
       .save("outputTests/output")
+
+
   }
 
 
@@ -218,12 +141,12 @@ object ServiceMain {
     val arrDB = dfDB.selectExpr("mediawiki.page")
 
     val arrDF = new Array[DataFrame](2)
-
     val tmpDF = arrDB.withColumn("page", explode(col("page")))
     arrDF(0) = tmpDF.selectExpr("page.id", "page.revision.text.__text")
     arrDF(1) = tmpDF.selectExpr("page.id", "page.title", "page.revision.text.__text")
 
     arrDF
+
   }
 
   def readPreprocessedDBFromJson(path: String, spark: SparkSession): DataFrame = {
@@ -250,16 +173,17 @@ object ServiceMain {
     var idTitleTextDB: DataFrame = null
 
     //SPLIT ARGS
+    println("args => "+args)
     val splittedArgs = args.splitAt(2)
 
     /* JSON TO DF  */
-    splittedArgs._1(1) match {
-      case "false" => {
+    (splittedArgs._1(0), splittedArgs._1(1) )match {
+      case ("--preprocess"," false") => {
         // READ PREPROCESSED DB
         tokenizedPreprocessedDB = readPreprocessedDBFromJson(pathWikiClean, spark)
         idTitleTextDB = readPreprocessedDBFromJson(pathIdTitleTextDB, spark)
       }
-      case "true" => {
+      case ("--preprocess"," true")  => {
         // PREPROCESS DB and WRITE IT on S3
         val fullDB = readFullDBFromJson(path + "wikidb.json", spark)
         tokenizedPreprocessedDB = fullDB(0)
@@ -281,8 +205,8 @@ object ServiceMain {
         renameDBFile("wikiclean.json", "preProcessedDB/", "scpmarysal", "us-east-1")
         renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpmarysal", "us-east-1")
       }
-
-      case _ => throw new IllegalArgumentException("no boolean param has been used for -preprocess command")
+      case ("--preprocess",_) => throw new IllegalArgumentException("[ARGS PARAM] -preprocess must have a true or false value")
+      case _ => throw new IllegalArgumentException("[ARGS PARAM] -preprocess command is missing")
     }
 
 
