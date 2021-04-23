@@ -1,14 +1,9 @@
-import com.amazonaws.{AmazonServiceException, SdkClientException}
-import com.amazonaws.auth.profile.ProfileCredentialsProvider
-import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
-import com.amazonaws.services.s3.model.{ListObjectsRequest, PutObjectRequest}
 import org.apache.spark.sql.functions.{col, explode}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
-import scala.collection.parallel.mutable.ParArray
 
 //DONE: pre processing db con flag.
 //TODO: persist su parOkapi. (S&M)
@@ -21,43 +16,52 @@ import scala.collection.parallel.mutable.ParArray
 
 object ServiceMain {
 
-/*
-  def ReadXMLfromS3(spark: SparkSession, xmlFile: String): DataFrame = {
+  // LOCAL MARY
+  val path = ""
+  val pathWikiClean = "wikiclean.json"
+  val pathIdTitleTextDB = "idTitleTextDB.json"
+  val pathWikiDB = "wikidb.json"
+  val pathOutput = "outputTests/"
 
-    val revisionStruct = StructType(
-      StructField("text", StringType, true) :: Nil)
+  /*
+  // LOCAL SAL
+  val path = ""
+  val pathWikiclean = ""
+  val pathWikiDB = ""
+  val pathTitleDB = ""
+  val pathOutput = ""
+  */
 
-    val schema = StructType(
-      StructField("title", StringType, true) ::
-        StructField("id", IntegerType, false) ::
-        StructField("revision", revisionStruct, true) :: Nil)
+  /*
+  //AWS
+  val path = "s3://scpmarysal/"
+  val pathWikiClean = "s3://scpmarysal/wikiclean.json"
+  val pathIdTitleTextDB = "s3://scpmarysal/idTitleTextDB.json"
+  val pathWikiDB = "s3://scpmarysal/preProcessedDB"
+  val pathOutput = "s3://scpmarysal/eccoIl30/"
+   */
 
-    val df = spark.read.format("com.databricks.spark.xml")
-      .option("rootTag", "mediawiki")
-      .option("rowTag", "page")
-      .schema(schema)
-      .xml(xmlFile)
+  /*
+    def ReadXMLfromS3(spark: SparkSession, xmlFile: String): DataFrame = {
 
-    df.selectExpr("id", "title", "revision.text")
+      val revisionStruct = StructType(
+        StructField("text", StringType, true) :: Nil)
 
-  }
-*/
+      val schema = StructType(
+        StructField("title", StringType, true) ::
+          StructField("id", IntegerType, false) ::
+          StructField("revision", revisionStruct, true) :: Nil)
 
-  def preProcessOfData(spark: SparkSession) = {
+      val df = spark.read.format("com.databricks.spark.xml")
+        .option("rootTag", "mediawiki")
+        .option("rowTag", "page")
+        .schema(schema)
+        .xml(xmlFile)
 
-    val testSenteces3 = Seq(
-      // (0, "Logistic: regression, models, are, neat."),
-      (1, "Hi I heard about Spark and I think Spark is beautiful"),
-      (2, "Java is Java, Spark is Spark and NoSQL is not SQL"),
-      (3, "Logistic: regression, models, are, neat, spark.")
-    )
+      df.selectExpr("id", "title", "revision.text")
 
-    val sentence2DataFrame = spark.createDataFrame(testSenteces3).toDF("id", "text")
-    val preProcessing2DB = new DataPreProcessing(sentence2DataFrame)
-    preProcessing2DB.preProcessDF()
-
-  }
-
+    }
+  */
 
   /*
   *
@@ -69,10 +73,22 @@ object ServiceMain {
   *
   * */
 
-  def generateOutput(source: Array[SimpleTuple] ,sparkSession: SparkSession): Array[(Int, Double, String, String)] = {
+  /*
+  def generateOutput(textDB: DataFrame, titleDB: DataFrame , source: Array[SimpleTuple], sparkSession: SparkSession): Array[(Int, Double, String, String)] = {
 
-    val titles = readPreprocessedDBFromJson( "s3://scpmarysal/preProcessedDB/cleanTitle.json", sparkSession).collect().par;
-    val texts = readPreprocessedDBFromJson( " s3://scpmarysal/preProcessedDB/wikiclean.json", sparkSession).collect();
+    val texts = textDB.collect().par
+    val titles = titleDB.collect().par
+
+    val temp = for {
+      field <- source.par
+      index = titles.indexOf(field.idOfTheDoc)
+    } yield {
+      if( index > -1 ) {
+        (field.idOfTheDoc, field.value, titles(index).getString(1))
+      }else{
+        (0, 0.0, "")
+      }
+    }
 
     val temp: ParArray[(Int,Double,String)] = titles
       .map { field => val id = field.getInt ( 0 ); (field, id) }
@@ -84,6 +100,7 @@ object ServiceMain {
           (0, 0.0, "")
         }
       } //se non metto un else non torna lo stesso tipo, torna una volta la tripla una volta UNIT e quindi il primo padre fra i due è ANY
+
 
    val result = for{
      elem <- temp.filterNot( x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" } )
@@ -98,24 +115,101 @@ object ServiceMain {
     ).toArray
   }
 
+   */
 
-  def block_of_code(preProcessedDB: DataFrame, myQuery: Array[String], sc: SparkContext, sparkSession: SparkSession): Unit = {
+  /*
+  def generateParSource(textDB: DataFrame, titleDB: DataFrame , source: Array[SimpleTuple], sparkSession: SparkSession) = {
 
-    val okapi = new ParOkapiBM25(preProcessedDB,myQuery, preProcessedDB.count() )
+    val texts = textDB.collect().par
+    val titles = titleDB.collect().par
 
-    val scores =  okapi.getBM25()
-    Sorting.parMergeSort( scores,2);
-    //var path = "s3://sal1/result"
-    var n = 50
-    lazy val firstN: Array[SimpleTuple] = scores.take(n);
-    lazy val result: Array[(Int,Double,String,String)] = generateOutput( firstN, sparkSession )
+    val temp = for {
+      field <- source.par
+      index = titles.indexOf(field.idOfTheDoc)
+    } yield {
+      if( index > -1 ) {
+        (field.idOfTheDoc, field.value, titles(index).getString(1))
+      }else{
+        (0, 0.0, "")
+      }
+    }
 
-    sc.parallelize(result).coalesce(1).saveAsTextFile("s3://scpmarysal/eccoIl30/")
+    val result = for{
+      elem <- temp.filterNot( x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" } )
+      id = elem._1;
+      index = texts.indexOf(id)
+    }yield{
+      if(index > -1) (id, elem._2, elem._3, texts(index).toString() ) else (0,0.0,"","")
+    } //non è chiaro perchè torna tipo ANY e non la tripla creata
 
+    result.filterNot(
+      x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" }
+    ).toArray
+  }
+
+  def generateParTitles(textDB: DataFrame, titleDB: DataFrame , source: Array[SimpleTuple], sparkSession: SparkSession) = {
+
+    val texts = textDB.collect().par
+    val titles = titleDB.collect().par
+
+    val sourceMap = source.map( el => {
+      (el.idOfTheDoc,el.value)
+    }).toMap
+
+    val temp: ParArray[(Int,Double,String)] = for{
+      field <- titles
+      id = field.getString(0).toInt
+      value = sourceMap.getOrElse(id , 0.0 )
+    } yield {
+      (id, value, field.getString ( 1 ))
+    }//se non metto un else non torna lo stesso tipo, torna una volta la tripla una volta UNIT e quindi il primo padre fra i due è ANY
+
+
+    val result = for{
+      elem <- temp.filterNot( x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" } )
+      id = elem._1;
+      index = texts.indexOf(id)
+    }yield{
+      if(index > -1) (id, elem._2, elem._3, texts(index).toString() ) else (0,0.0,"","")
+    } //non è chiaro perchè torna tipo ANY e non la tripla creata
+
+    result.filterNot(
+      x=>  { x._1 == 0 && x._2 == 0.0 && x._3 == "" }
+    ).toArray
+  }
+*/
+  def generateParDF(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
+
+    /* TEMPO DI ESECUZIONE di questa FUNZIONE
+
+      {"id":"ParDF","text":"Elapsed time: 259ms"}
+      {"id":"ParDF","text":"Elapsed time: 0sec"}
+     */
+    val ids = source.map(el => el.idOfTheDoc.toString)
+    idTitleTextDB.filter(col("id").isin(ids: _*))
   }
 
 
-  def readFullDBFromJson(path : String , spark : SparkSession) : Array[DataFrame] = {
+  def block_of_code(tokenizedPreprocessedDB: DataFrame, idTitleTextDB: DataFrame, myQuery: Array[String], sc: SparkContext, sparkSession: SparkSession): Unit = {
+
+    val okapi = new ParOkapiBM25(tokenizedPreprocessedDB, myQuery, tokenizedPreprocessedDB.count())
+
+    val scores = okapi.getBM25()
+    Sorting.parMergeSort(scores, 2);
+
+    val n = 10
+    lazy val firstN: Array[SimpleTuple] = scores.take(n);
+
+    lazy val result = generateParDF(idTitleTextDB, firstN, sparkSession)
+
+    result.coalesce(1).write
+      .mode("overwrite")
+      .format("json")
+      .save("outputTests/output")
+  }
+
+
+  def readFullDBFromJson(path: String, spark: SparkSession): Array[DataFrame] = {
 
     val dfDB = spark.read
       .option("multiline", "true")
@@ -127,12 +221,12 @@ object ServiceMain {
 
     val tmpDF = arrDB.withColumn("page", explode(col("page")))
     arrDF(0) = tmpDF.selectExpr("page.id", "page.revision.text.__text")
-    arrDF(1) = tmpDF.selectExpr("page.id", "page.title")
+    arrDF(1) = tmpDF.selectExpr("page.id", "page.title", "page.revision.text.__text")
 
     arrDF
   }
 
-  def readPreprocessedDBFromJson(path : String , spark : SparkSession) : DataFrame = {
+  def readPreprocessedDBFromJson(path: String, spark: SparkSession): DataFrame = {
     val dfDB = spark.read
       .json(path)
 
@@ -147,15 +241,13 @@ object ServiceMain {
   * */
 
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf ().setAppName ( this.getClass.getName )
-    val spark: SparkSession = SparkSession.builder.config ( conf ).getOrCreate ()
-    spark.sparkContext.setLogLevel ( "WARN" )
+    val conf = new SparkConf().setAppName(this.getClass.getName).setMaster("local[*]")
+    val spark: SparkSession = SparkSession.builder.config(conf).getOrCreate()
+    spark.sparkContext.setLogLevel("WARN")
     val sc = spark.sqlContext.sparkContext
 
-    var wikiDF : DataFrame = null
-
-    /* id, text*/
-    var wikiText : DataFrame = null
+    var tokenizedPreprocessedDB: DataFrame = null
+    var idTitleTextDB: DataFrame = null
 
     //SPLIT ARGS
     val splittedArgs = args.splitAt(2)
@@ -164,56 +256,58 @@ object ServiceMain {
     splittedArgs._1(1) match {
       case "false" => {
         // READ PREPROCESSED DB
-        wikiDF = readPreprocessedDBFromJson("s3://scpmarysal/wikiclean.json", spark)
+        tokenizedPreprocessedDB = readPreprocessedDBFromJson(pathWikiClean, spark)
+        idTitleTextDB = readPreprocessedDBFromJson(pathIdTitleTextDB, spark)
       }
       case "true" => {
-        //val path = "s3://scpmarysal/"
-        val path = "C:\\Users\\Salvo\\GitHub\\SCP-Project-v2\\"
-        val tempDF = readFullDBFromJson( path+"wikidb.json", spark)
-        wikiDF = tempDF(0);
-        val metaInfDF = tempDF(1)
+        // PREPROCESS DB and WRITE IT on S3
+        val fullDB = readFullDBFromJson(path + "wikidb.json", spark)
+        tokenizedPreprocessedDB = fullDB(0)
+        idTitleTextDB = fullDB(1)
 
         //PREPROCESS FULL DB
-        val preProcessData = new DataPreProcessing(wikiDF)
+        val preProcessData = new DataPreProcessing(tokenizedPreprocessedDB)
         val preProcessedDB = preProcessData.preProcessDF()
 
-        metaInfDF.write.mode("overwrite").format("json").save(path+"metaInfDB")
+        idTitleTextDB.write.mode("overwrite").format("json").save(path + "idTitleTextDB")
 
         //WRITE PREPROCESSED DB TO A FILE
         preProcessedDB.write
           .mode("overwrite")
           .format("json")
-          .save("s3://scpmarysal/preProcessedDB")
+          .save(pathWikiDB)
 
         //RENAME DB FILE
-        renameDBFile()
+        renameDBFile("wikiclean.json", "preProcessedDB/", "scpmarysal", "us-east-1")
+        renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpmarysal", "us-east-1")
       }
 
       case _ => throw new IllegalArgumentException("no boolean param has been used for -preprocess command")
     }
 
-    val userInput = splittedArgs._2.reduce((x,y) => x + " " + y)
 
-    val query = Seq( (0, userInput) )
-    val queryDF = spark.createDataFrame( query ).toDF( "id", "__text" )
-    val dbQuery = new DataPreProcessing( queryDF ).preProcessDF()
+    val userInput = splittedArgs._2.reduce((x, y) => x + " " + y)
+
+    val query = Seq((0, userInput))
+    val queryDF = spark.createDataFrame(query).toDF("id", "__text")
+    val dbQuery = new DataPreProcessing(queryDF).preProcessDF()
     val queryKeyword = dbQuery.select("words_clean").collect()
     val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
 
-    time ( block_of_code(wikiDF,myQuery,sc,spark) , spark )
+    time(block_of_code(tokenizedPreprocessedDB, idTitleTextDB, myQuery, sc, spark), spark, "TotalExec")
 
   }
 
 
-  def time[R](block: => R, spark : SparkSession): R = {
+  def time[R](block: => R, spark: SparkSession, name: String): R = {
 
     val t0 = System.nanoTime()
-    val result = block    // call-by-name
+    val result = block // call-by-name
     val t1 = System.nanoTime()
 
     val testSenteces3 = Seq(
-      (1, "Elapsed time: " + (t1 - t0)/1000000 + "ms"),
-      (2, "Elapsed time: " + (t1 - t0)/1000000000 + "sec"),
+      (name, "Elapsed time: " + (t1 - t0) / 1000000 + "ms"),
+      (name, "Elapsed time: " + (t1 - t0) / 1000000000 + "sec"),
     )
 
     val sentence2DataFrame = spark.createDataFrame(testSenteces3).toDF("id", "text")
@@ -221,25 +315,23 @@ object ServiceMain {
     sentence2DataFrame.coalesce(1).write
       .mode("overwrite")
       .format("json")
-      .save("s3://scpmarysal/timeOutput/")
+      .save(pathOutput + "timeOutput")
 
     result
   }
 
 
-  def renameDBFile() : Unit = {
+  def renameDBFile(newfileName: String, folder: String, bucketName: String, clientRegion: String): Unit = {
 
-    val clientRegion = "us-east-1"
-    val bucketName = "scpmarysal"
+    val s3 = AmazonS3ClientBuilder.standard.withRegion(clientRegion).build
 
-    val s3= AmazonS3ClientBuilder.standard.withRegion(clientRegion).build
-
-    val x = s3.listObjectsV2(bucketName, "preProcessedDB/")
+    val x = s3.listObjectsV2(bucketName, folder)
     val y = x.getObjectSummaries()
-    y.forEach( r => {
-      if (r.getKey.contains("part-"))
-        s3.copyObject(bucketName, r.getKey,bucketName, "wikiclean.json")
-        s3.deleteObject(bucketName,  r.getKey)
+    y.forEach(r => {
+      val fileName = r.getKey
+      if (fileName.contains("part-"))
+        s3.copyObject(bucketName, fileName, bucketName, newfileName)
+      s3.deleteObject(bucketName, fileName)
     })
 
     /*
@@ -298,7 +390,8 @@ object ServiceMain {
 
 }
 
-case class SimpleTuple(idOfTheDoc: Long , value: Double){
-  override def toString: String = this.idOfTheDoc+",\t"+this.value ;
-  def compareTo(x: SimpleTuple) = this.value-x.value
+case class SimpleTuple(idOfTheDoc: Long, value: Double) {
+  override def toString: String = this.idOfTheDoc + ",\t" + this.value;
+
+  def compareTo(x: SimpleTuple) = this.value - x.value
 }
