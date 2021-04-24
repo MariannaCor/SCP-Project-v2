@@ -1,10 +1,10 @@
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.{coalesce, col, explode}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
-import scala.collection.parallel.mutable.ParArray
 
 //DONE: pre processing db con flag.
 //TODO: persist su parOkapi. (S&M)
@@ -110,13 +110,18 @@ object ServiceMain {
   }
 
 
-  def block_of_code(tokenizedPreprocessedDB: DataFrame, idTitleTextDB: DataFrame, myQuery: Array[String], sc: SparkContext, sparkSession: SparkSession): Unit = {
+  def block_of_code(tokenizedPreprocessedDB: RDD[(Int, Array[String])], idTitleTextDB: DataFrame, myQuery: Array[String], sc: SparkContext, sparkSession: SparkSession): Unit = {
 
+   // tokenizedPreprocessedDB.show(false)
     val okapi = new ParOkapiBM25(tokenizedPreprocessedDB, myQuery, tokenizedPreprocessedDB.count())
     val scores = okapi.getBM25()
-    Sorting.parMergeSort(scores, 2);
+    val scoresArray = scores.collect()
+    Sorting.parMergeSort(scoresArray, 2);
 
     val n = 10
+    scoresArray.take(n).map(println(_))
+
+    /*
     lazy val firstN: Array[SimpleTuple] = scores.take(n);
     lazy val result = generateParDF(idTitleTextDB, firstN, sparkSession)
 
@@ -127,7 +132,7 @@ object ServiceMain {
       .mode("overwrite")
       .format("json")
       .save("outputTests/output")
-
+*/
 
   }
 
@@ -169,6 +174,8 @@ object ServiceMain {
     spark.sparkContext.setLogLevel("WARN")
     val sc = spark.sqlContext.sparkContext
 
+
+   // OFFICIAL VERSION
     var tokenizedPreprocessedDB: DataFrame = null
     var idTitleTextDB: DataFrame = null
 
@@ -210,6 +217,7 @@ object ServiceMain {
     }
 
 
+
     val userInput = splittedArgs._2.reduce((x, y) => x + " " + y)
 
     val query = Seq((0, userInput))
@@ -218,7 +226,28 @@ object ServiceMain {
     val queryKeyword = dbQuery.select("words_clean").collect()
     val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
 
-    time(block_of_code(tokenizedPreprocessedDB, idTitleTextDB, myQuery, sc, spark), spark, "TotalExec")
+    val preProcessedRDD = sc.parallelize(tokenizedPreprocessedDB.collect())
+    time(block_of_code(/*ERRORE QUI, tanti auguri*/, idTitleTextDB, myQuery, sc, spark), spark, "TotalExec")
+    // END OFFICIAL VERSION
+
+        /*
+     // TEST VERSION
+
+     val testSenteces = Seq(
+       (1, Array("hi", "heard", "spark", "think", "spark", "beautiful")),
+       (2, Array("java", "java", "spark", "spark", "nosql", "sql")),
+       (3, Array("logistic", "regression", "models", "neat", "spark"))
+     )
+
+     val preProcessed2DB = sc.parallelize(testSenteces)
+
+     val myQuery =  Array("logistic", "safdsl", "regression" , "dsafkj", "models" ,"suca" ,"neat" ,"developed", "good" ,"nosql", "program")
+     //val myQuery = Array("spark", "java", "wow")
+     val idTitleTextDB = null
+     time(block_of_code(preProcessed2DB, idTitleTextDB, myQuery, sc, spark), spark, "TotalExec")
+
+    // END TEST VERSION
+    */
 
   }
 

@@ -1,11 +1,10 @@
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 
 import scala.collection.{GenSeq, mutable}
 import scala.math.log
 
-class ParOkapiBM25(dbRDD: RDD[(Int, Array[String])], q: Seq[String], dfSize: Long ) extends Serializable {
+class ParOkapiBM25OLD(dataFrame: DataFrame, q: GenSeq[String], dfSize: Long ) extends Serializable {
 
   /*
   |--------------------------------------------------------------------------
@@ -39,110 +38,10 @@ def calcAvgDocs(pagesLenght: DataFrame): Double = {
 }
 
 
-def getBM25() :  RDD[(Int, Double)]  = {
+def getBM25() : Array[SimpleTuple] = {
 
-  /*
-  //OK MA SENZA KEYWORDS MANCANTI
-  //(id,docLength,word , 1)
-  val unfoldToCountTF = dbRDD.flatMap( row => {
-   row._2.filter(word => q.indexOf(word) != -1)
-      .map(word => ((row._1, row._2.length, word),1))
-  })
-   */
+  var templist = mutable.MutableList[(String, Int)]()
 
-
-  //unfoldToCountTF = RDD[((Int, Int, String), Int)]
-  val tf = dbRDD.flatMap(row => {
-    val x: Seq[((Int, Int, String), Int)] = q.map(keyword => {
-      if(row._2.indexOf(keyword) != -1)
-        ((row._1, row._2.length, keyword), row._2.filter(word => word == keyword).length)
-      else
-        ((row._1, row._2.length, keyword),0)
-    })
-    x
-  })
-
-  // DF = num di documenti in cui compare la keyword.
-  //  Quindi risultato deve essere (keyword, num di documenti in cui compare)
-
-
- // val df = tf.map( row =>  (row._1._3 , 1) ).reduceByKey(_+_)
-
-  //if count di (keyword,id) > 0 --> (keyword,1)
-  val df = tf.filter( el => el._2 > 0).map( row =>  (row._1._3 , 1) ).reduceByKey(_+_)
-
-  /*
-  println("PRINT OF tf: ")
-  tf.collect().map(row => {
-    println(s"id,word = ${row._1} | count = ${row._2} ")
-  })
-
-  println("PRINT OF df: ")
-  df.collect().map(row => {
-    println(s"word = ${row._1} | count = ${row._2} ")
-  })
-*/
-  val idf = df.map( tuple => (tuple._1, calcIDFFunc( tuple._2, dfSize )) )
-/*
-  println("PRINT OF idf: ")
-  idf.collect().map(row => {
-    println(s"word = ${row._1} | count = ${row._2} ")
-  })
-
-*/
-  val docLengths = dbRDD.map( row => {
-    ((row._1, 1),row._2.length)
-  })
-/*
-  println("PRINT OF docLengths: ")
-  docLengths.collect().map(row => {
-    println(s"id = ${row._1} | length = ${row._2} ")
-  })
-*/
-  val totLen = docLengths.reduce( (x, y) => (x._1, x._2 + y._2) )._2
- // println(s"PRINT OF totLen: $totLen")
-
-  // ALTERNATIVA A docLengths.count()
-  val numberOfDocs =  docLengths.reduce((x,y) => ((0, x._1._2 + y._1._2), 0))._1._2
-  //println(s"PRINT OF numberOfDocs: $numberOfDocs")
-
-  val avg: Double = totLen.toDouble / numberOfDocs
-  //println(s"PRINT OF avg: $avg")
-
-  //Sarà sempre piccolo perchè conterrà solo le keyword della query che compaiono nei doc
-  val allIdf = idf.collectAsMap()
-
-  // el = ((docId, docLength, keyword), tf)
-  val fullData = tf.map(el => {
-    //(docId, docLength, keyword, tf, idf)
-    (el._1._1, el._1._2, el._1._3, el._2, allIdf.getOrElse(el._1._3, 0.0) )
-  })
-/*
-  println("PRINT OF fullData: ")
-  fullData.collect().map(row => {
-    println(s"id = ${row._1} | docLength = ${row._2} | | keyword = ${row._3} | tf = ${row._4} | idf = ${row._5} ")
-  })
-*/
-  val scores= fullData.map(el => {
-    ( el._1,
-      calculateOkapiBM25( avg, el._4, el._5, el._2 ))
-  }).reduceByKey((x,y) => x + y)
-/*
-  println("PRINT OF scores: ")
-  scores.collect().map(row => {
-    println(s"id = ${row._1} | score = ${row._2} ")
-  })
-*/
-  // docLengths.foreachPartition()
-
- //id , array (key,1)
-  // id, key, 1
-  // id, key, 1
-  // id, key, 1
-
-
-
-  /*
   var data_docs = for {
     row <- dataFrame.collect().par
     id = row.get( 0 ).toString.toLong
@@ -168,8 +67,8 @@ def getBM25() :  RDD[(Int, Double)]  = {
 
     (id, wordOfDocs.length, y) // }
   }
-*/
-/*
+
+
   lazy val df_ofWords: Map[String, Int] = templist.groupBy( _._1 ).mapValues( seq => seq.map( _._2 ).reduce( _ + _ ) ) //tempList groupBy(word => word) mapValues(_.size) //
   lazy val idf_OfWords = df_ofWords.map( tuple => (tuple._1, calcIDFFunc( tuple._2, dfSize )) )
   lazy val tempTF = data_docs.map( _._3 ).reduce( (a1, a2) => a1.++( a2 ) )
@@ -196,8 +95,7 @@ def getBM25() :  RDD[(Int, Double)]  = {
     }).toArray
 
   scores
-*/
-  scores
+
 }
 
   //return: calcolo dei tf di q su tutti i documenti
@@ -207,13 +105,10 @@ def getBM25() :  RDD[(Int, Double)]  = {
 
   //return: calcolo tutte lunghezze dei documenti
   //input: dataframe processato
-  /*
   def calcPageLenght(): DataFrame = {
     val lengthUdf = udf { (page_words: mutable.WrappedArray[String]) => page_words.length }
     dataFrame.withColumn("doc_length", lengthUdf(dataFrame("words_clean")))
   }
-
-   */
 
   //return: calcolo df di tutte le parole nella query (numero di documenti contenenti la parola nella query, per ogni parola)
   def calcDF(df: DataFrame): DataFrame = {

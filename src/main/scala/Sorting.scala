@@ -33,25 +33,25 @@ object Sorting {
 */
 
   /* it returns true if the array is ordered from higher to lower value */
-  def checkSoundness(myarr: Array[SimpleTuple]): Boolean = {
+  def checkSoundness(myarr: Array[(Int,Double)]): Boolean = {
     var i = 0 ;
     while (i < myarr.length - 2 ){
-      if( myarr(i).value < myarr(i+1).value ) {  return false  }
+      if( myarr(i)._2 < myarr(i+1)._2 ) {  return false  }
       i = i+1;
     }
     true
   }
 
 
-  def blockOfCode(myarr: Array[SimpleTuple]): Unit ={
+  def blockOfCode(myarr: Array[(Int,Double)]): Unit ={
     parMergeSort(myarr,  4);
   }
 
-  def parMergeSort(xs: Array[SimpleTuple], maxDepth: Int) = {
+  def parMergeSort(xs: Array[(Int,Double)], maxDepth: Int) = {
 
     if (maxDepth % 2 == 1) throw new Exception("max depth param must be an even number")
    //array di appoggio
-   val ys = new Array[SimpleTuple](xs.length)
+   val ys = new Array[(Int,Double)](xs.length)
 
    def sort(from: Int, until: Int, depth: Int):Unit = {
      if (depth == maxDepth) {
@@ -109,20 +109,20 @@ object Sorting {
 * */
 
 
-  def merge(src: Array[SimpleTuple], dst: Array[SimpleTuple], from: Int, mid: Int, until: Int) = {
+  def merge(src: Array[(Int,Double)], dst: Array[(Int,Double)], from: Int, mid: Int, until: Int) = {
 
     var left = from
     var right = mid
     var i = from
 
     while (left < mid && right < until) {
-      while (left < mid && src(left).value >= src(right).value) {
+      while (left < mid && src(left)._2 >= src(right)._2) {
         dst(i) = src(left)
         i += 1
         left += 1
       }
 
-      while (right < until && src(right).value >= src(left).value) {
+      while (right < until && src(right)._2 >= src(left)._2) {
         dst(i) = src(right)
         i += 1
         right += 1
@@ -144,23 +144,23 @@ object Sorting {
   }
 
 
-  def SegmentQuickSort(xs: Array[SimpleTuple], from: Int, until: Int) = {
+  def SegmentQuickSort(xs: Array[(Int,Double)], from: Int, until: Int) = {
 
      // the quicksort recursive algorithm in the segment [from,until]
-     def quickSort(arr: Array[SimpleTuple]): Array[SimpleTuple] = {
+     def quickSort(arr: Array[(Int,Double)]): Array[(Int,Double)] = {
        if( arr.length <= 1 ){
          arr
        }else{
          val pivot = arr ( arr.length / 2 )
          Array.concat (
-           quickSort ( arr filter (pivot.value < _.value) ),
-           arr filter (pivot.value == _.value),
-           quickSort ( arr filter (pivot.value > _.value) )
+           quickSort ( arr filter (pivot._2 < _._2) ),
+           arr filter (pivot._2 == _._2),
+           quickSort ( arr filter (pivot._2 > _._2) )
          )
        }
      }
 
-    var ys = new Array[SimpleTuple]( until - from )
+    var ys = new Array[(Int,Double)]( until - from )
     var i = from;
     var j = 0;
 
