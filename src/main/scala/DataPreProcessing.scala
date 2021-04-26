@@ -3,7 +3,7 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 
 
-class DataPreProcessing( private var df: DataFrame )  {
+class DataPreprocessing(private var df: DataFrame )  {
 
   def preProcessDF() : DataFrame = {
     val cleanedDF = removePuntuaction()

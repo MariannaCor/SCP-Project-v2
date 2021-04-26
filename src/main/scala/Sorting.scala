@@ -1,6 +1,3 @@
-
-import breeze.math.i
-import org.apache.hadoop.io.BooleanWritable.Comparator
 import utils.primitives
 
 object Sorting {

@@ -4,7 +4,7 @@ import java.util.concurrent.{ForkJoinPool, ForkJoinTask, RecursiveTask}
 
 import scala.util.DynamicVariable
 
-object primitives {
+ object primitives {
 
   def time[R](block: => R): R = {
     val t0 = System.nanoTime ()

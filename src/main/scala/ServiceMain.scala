@@ -1,14 +1,12 @@
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.{coalesce, col, explode}
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession, functions}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
 
 //DONE: pre processing db con flag.
-//TODO: persist su parOkapi. (S&M)
-//TODO: sync su parOkapi. (S&M)
 //TODO: data pre processing versione RDD.(M)
 //DONE: rinominare il file programmaticamente.
 //DONE: 1. sorting decrescente e take n 2.(DONE) output finale con titolo e testo dei primi n file trovati. (S) (DONE)
@@ -18,13 +16,14 @@ import scala.collection.mutable
 object ServiceMain {
 
   // LOCAL MARY
-/*  val path = ""
+/*
+  val path = ""
   val pathWikiClean = "wikiclean.json"
   val pathIdTitleTextDB = "idTitleTextDB.json"
   val pathWikiDB = "wikidb.json"
   val pathOutput = "outputTests/"
 */
-
+/*
   // LOCAL SAL
   val path = ""
   val pathWikiClean = "wikiclean.json"
@@ -32,16 +31,14 @@ object ServiceMain {
   val pathWikiDB = "wikidb.json"
   val pathOutput = "outputTests/"
 
+*/
 
-
-  /*
   //AWS
   val path = "s3://scpmarysal/"
-  val pathWikiClean = "s3://scpmarysal/wikiclean.json"
-  val pathIdTitleTextDB = "s3://scpmarysal/idTitleTextDB.json"
-  val pathWikiDB = "s3://scpmarysal/preProcessedDB"
-  val pathOutput = "s3://scpmarysal/eccoIl30/"
-   */
+  val pathWikiClean = path+"wikiclean.json"
+  val pathIdTitleTextDB = path+"idTitleTextDB.json"
+  val pathWikiDB = path+"preProcessedDB"
+  val pathOutput = path+"eccoIl30/"
 
   /*
     def ReadXMLfromS3(spark: SparkSession, xmlFile: String): DataFrame = {
@@ -65,19 +62,9 @@ object ServiceMain {
     }
   */
 
-  /*
-  *
-  *   A Dataset is a distributed collection of data.
-  *   Dataset in an interface that provides the benefits of RDDs
-  *   (strong typing, ability to use powerful lambda functions)
-  *   with the benefits of Spark SQL’s optimized execution engine.
-  *   quindi ogni volta che creiamo un dataframe è un RDD.
-  *
-  * */
   def generateOutput(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
     val df = idTitleTextDB.collect().par
     val mapsource = source.map( x=> (x.idOfTheDoc, x.value) ).toMap.par
-
     val res = for{
      row <-df
      idDF = row(1).toString.toLong
@@ -98,31 +85,35 @@ object ServiceMain {
     x
   }
 
-  def generateParDF(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
+  def generateParDF(idTitleTextDB: DataFrame, source: Array[(Int,Double)], spark: SparkSession) = {
 
     /* TEMPO DI ESECUZIONE di questa FUNZIONE
 
       {"id":"ParDF","text":"Elapsed time: 259ms"}
       {"id":"ParDF","text":"Elapsed time: 0sec"}
      */
-    val ids = source.map(el => el.idOfTheDoc.toString)
+    val ids = source.map(el => el._1.toString)
     idTitleTextDB.filter(col("id").isin(ids: _*))
   }
 
 
-  def block_of_code(tokenizedPreprocessedDB: RDD[(Int, Array[String])], idTitleTextDB: DataFrame, myQuery: Array[String], sc: SparkContext, sparkSession: SparkSession): Unit = {
+  def block_of_code(tokenizedPreprocessedDB: RDD[(Int, Array[String])], idTitleTextDB: DataFrame, myQuery: Array[String], sparkSession: SparkSession): Unit = {
 
    // tokenizedPreprocessedDB.show(false)
-    val okapi = new ParOkapiBM25(tokenizedPreprocessedDB, myQuery, tokenizedPreprocessedDB.count())
-    val scores = okapi.getBM25()
-    val scoresArray = scores.collect()
-    Sorting.parMergeSort(scoresArray, 2);
+    val okapi = new ParOkapiBM25(tokenizedPreprocessedDB, myQuery)
+    val scores: RDD[(Int, Double)] = okapi.getBM25()
+
+    //val scoresArray = scores.collect()
+    //Sorting.parMergeSort(scoresArray, 2);
+    object PairOrdering extends Ordering[(Int,Double)] {
+      def compare(a: (Int,Double), b:(Int,Double)) = a._2 compare b._2
+    }
 
     val n = 10
-    scoresArray.take(n).map(println(_))
+    lazy val firstN = scores.top(n)( PairOrdering ); //fa il contrario di take ordering e torna i primi 10 con score più alto direttamente dalle RDD.. consuma molto meno memoria sul driver.
 
-    /*
-    lazy val firstN: Array[SimpleTuple] = scores.take(n);
+    firstN map (println(_))
+
     lazy val result = generateParDF(idTitleTextDB, firstN, sparkSession)
 
     //lazy val result = generateOutput(idTitleTextDB, firstN, sparkSession).seq
@@ -132,7 +123,6 @@ object ServiceMain {
       .mode("overwrite")
       .format("json")
       .save("outputTests/output")
-*/
 
   }
 
@@ -168,36 +158,51 @@ object ServiceMain {
   *
   * */
 
+
+
+  //def fromDFtoRDD[T](sc: SparkContext, tokenizedPreprocessedDB: DataFrame) : RDD[T] = { volevo farla in questo modo vedi dopo come fare}
+
+  def fromDFtoRDD(sc: SparkContext, tokenizedPreprocessedDB: DataFrame) =
+    sc.parallelize(tokenizedPreprocessedDB.collect())
+      .map( row => (
+        row.getString(0).toInt, row.get(1).asInstanceOf[mutable.WrappedArray[String]].toArray[String])
+      )
+
+
+
+
   def main(args: Array[String]): Unit = {
     val conf = new SparkConf().setAppName(this.getClass.getName).setMaster("local[*]")
     val spark: SparkSession = SparkSession.builder.config(conf).getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
     val sc = spark.sqlContext.sparkContext
 
-
    // OFFICIAL VERSION
     var tokenizedPreprocessedDB: DataFrame = null
     var idTitleTextDB: DataFrame = null
 
+    println("args => ")
+    args.foreach( x => print(" " +x))
+
     //SPLIT ARGS
-    println("args => "+args)
-    val splittedArgs = args.splitAt(2)
+    //if check is necessary to avoid null pointer exception
+    val (command,query) = if(args.length > 3) args.splitAt(2) else new Array[String](2) -> new Array[String](0)
 
     /* JSON TO DF  */
-    (splittedArgs._1(0), splittedArgs._1(1) )match {
-      case ("--preprocess"," false") => {
+    (command(0), command(1) )match {
+      case ("--preprocess","false") => {
         // READ PREPROCESSED DB
         tokenizedPreprocessedDB = readPreprocessedDBFromJson(pathWikiClean, spark)
         idTitleTextDB = readPreprocessedDBFromJson(pathIdTitleTextDB, spark)
       }
-      case ("--preprocess"," true")  => {
+      case ("--preprocess","true")  => {
         // PREPROCESS DB and WRITE IT on S3
         val fullDB = readFullDBFromJson(path + "wikidb.json", spark)
         tokenizedPreprocessedDB = fullDB(0)
         idTitleTextDB = fullDB(1)
 
         //PREPROCESS FULL DB
-        val preProcessData = new DataPreProcessing(tokenizedPreprocessedDB)
+        val preProcessData = new DataPreprocessing(tokenizedPreprocessedDB)
         val preProcessedDB = preProcessData.preProcessDF()
 
         idTitleTextDB.write.mode("overwrite").format("json").save(path + "idTitleTextDB")
@@ -212,27 +217,25 @@ object ServiceMain {
         renameDBFile("wikiclean.json", "preProcessedDB/", "scpmarysal", "us-east-1")
         renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpmarysal", "us-east-1")
       }
-      case ("--preprocess",_) => throw new IllegalArgumentException("[ARGS PARAM] -preprocess must have a true or false value")
-      case _ => throw new IllegalArgumentException("[ARGS PARAM] -preprocess command is missing")
+
+      case _ => throw new IllegalArgumentException("--preprocess is missing or was not recognized with value true or false")
     }
 
+    val userInput = query.reduce((x, y) => x + " " + y)
 
-
-    val userInput = splittedArgs._2.reduce((x, y) => x + " " + y)
-
-    val query = Seq((0, userInput))
-    val queryDF = spark.createDataFrame(query).toDF("id", "__text")
-    val dbQuery = new DataPreProcessing(queryDF).preProcessDF()
+    val seqQuery = Seq((0, userInput))
+    val queryDF = spark.createDataFrame(seqQuery).toDF("id", "__text")
+    val dbQuery = new DataPreprocessing(queryDF).preProcessDF()
     val queryKeyword = dbQuery.select("words_clean").collect()
     val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
 
-    val preProcessedRDD = sc.parallelize(tokenizedPreprocessedDB.collect())
-    time(block_of_code(/*ERRORE QUI, tanti auguri*/, idTitleTextDB, myQuery, sc, spark), spark, "TotalExec")
+    val preProcessedRDD = fromDFtoRDD(sc,tokenizedPreprocessedDB)
+    time(block_of_code(preProcessedRDD, idTitleTextDB, myQuery, spark), spark, "TotalExec")
+
     // END OFFICIAL VERSION
 
-        /*
-     // TEST VERSION
-
+  // TEST VERSION
+    /*
      val testSenteces = Seq(
        (1, Array("hi", "heard", "spark", "think", "spark", "beautiful")),
        (2, Array("java", "java", "spark", "spark", "nosql", "sql")),
@@ -243,12 +246,10 @@ object ServiceMain {
 
      val myQuery =  Array("logistic", "safdsl", "regression" , "dsafkj", "models" ,"suca" ,"neat" ,"developed", "good" ,"nosql", "program")
      //val myQuery = Array("spark", "java", "wow")
-     val idTitleTextDB = null
-     time(block_of_code(preProcessed2DB, idTitleTextDB, myQuery, sc, spark), spark, "TotalExec")
-
+    val idTitleTextDB = null
+    time(block_of_code(preProcessed2DB, idTitleTextDB, myQuery, spark), spark, "TotalExec")
     // END TEST VERSION
-    */
-
+   */
   }
 
 
@@ -258,14 +259,15 @@ object ServiceMain {
     val result = block // call-by-name
     val t1 = System.nanoTime()
 
-    val testSenteces3 = Seq(
+    val elapsedTimeSentence = Seq(
       (name, "Elapsed time: " + (t1 - t0) / 1000000 + "ms"),
       (name, "Elapsed time: " + (t1 - t0) / 1000000000 + "sec"),
     )
+    println("elapsed time =>  \n"+elapsedTimeSentence.map( x => "\n "+x._2))
 
-    val sentence2DataFrame = spark.createDataFrame(testSenteces3).toDF("id", "text")
+    val elapsedTimeSentenceDataFrame = spark.createDataFrame(elapsedTimeSentence).toDF("id", "text")
 
-    sentence2DataFrame.coalesce(1).write
+    elapsedTimeSentenceDataFrame.coalesce(1).write
       .mode("overwrite")
       .format("json")
       .save(pathOutput + "timeOutput")
@@ -280,6 +282,7 @@ object ServiceMain {
 
     val x = s3.listObjectsV2(bucketName, folder)
     val y = x.getObjectSummaries()
+
     y.forEach(r => {
       val fileName = r.getKey
       if (fileName.contains("part-"))
@@ -341,10 +344,13 @@ object ServiceMain {
   }
 
 
+
 }
 
-case class SimpleTuple(idOfTheDoc: Long, value: Double) {
-  override def toString: String = this.idOfTheDoc + ",\t" + this.value;
 
+
+
+case class SimpleTuple(idOfTheDoc: Long, value: Double) {
+  override def toString: String = this.idOfTheDoc + ",\t" + this.value
   def compareTo(x: SimpleTuple) = this.value - x.value
 }
