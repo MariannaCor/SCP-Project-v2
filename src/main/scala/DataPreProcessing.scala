@@ -6,6 +6,9 @@ import org.apache.spark.sql.functions._
 class DataPreprocessing(private var df: DataFrame )  {
 
   def preProcessDF() : DataFrame = {
+    println("schema of preprocess is")
+    df.printSchema()
+
     val cleanedDF = removePuntuaction()
     val tokenizedDF = tokenize(cleanedDF)
     removeStopWords(tokenizedDF)
@@ -17,7 +20,7 @@ class DataPreprocessing(private var df: DataFrame )  {
 
   //return sentenceDF_clean
   private def removePuntuaction() : DataFrame = {
-    df.select(col("id"), lower(regexp_replace(col("__text"), "[^a-zA-Z\\s]", "")).alias("text"))
+    df.select(col("id"), lower(regexp_replace(col("content"), "[^a-zA-Z\\s]", "")).alias("text"))
   }
 
   private def tokenize(df: DataFrame) : DataFrame = {
