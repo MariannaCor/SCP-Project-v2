@@ -141,22 +141,19 @@ object ServiceMain {
 
  }
 
- def readFullDBFromJson(path: String, spark: SparkSession): Array[DataFrame] = {
+ def readFullDBFromJson(path: String, spark: SparkSession) = {
 
     val dfDB = spark.read
       .option("multiline", "true")
       .json(path)
 
-    val arrDF = new Array[DataFrame](2)
-
     val arrDB = dfDB.selectExpr("mediawiki.page")
     val tmpDF = arrDB.withColumn("page", explode(col("page")))
 
-    arrDF(0) = tmpDF.selectExpr("page.id", "page.revision.text.content")
-    arrDF(1) = tmpDF.selectExpr("page.id", "page.title", "page.revision.text.content")
+   val dfToPreprocess =  tmpDF.selectExpr("page.id", "page.revision.text.content")
+   val dfToOutput = tmpDF.selectExpr("page.id", "page.title", "page.revision.text.content")
 
-    arrDF
-
+   (dfToPreprocess,dfToOutput)
   }
 
  def readFullDBFromJsonOld(path: String, spark: SparkSession): Array[DataFrame] = {
@@ -195,6 +192,49 @@ object ServiceMain {
        row.get(1).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
      ))
 
+  /*
+    Ci sono 3 possibili valori da inserire. Se qualcuno manca vengono presi i parametri di default
+    esempio di un modello di args corretto
+    --preprocess=true/false --numFile=N --query="keyword1 keyword2 keyword3"
+   */
+
+  def check_and_getArgues(commands: Array[String]) = {
+
+    /*var i = 0;
+    while( i<commands.length){
+      println("a("+i+") : "+commands(i))
+      i = i+1;
+    }*/
+
+    var p: Boolean = false  //default value
+    var f: Int = 1          //default value
+    var q: String = ""      //default value
+
+    commands.foreach( arg =>
+      arg.substring(0,3) match {
+        case "--p" =>
+          p = arg.substring(4,arg.length) match {
+            case "true" =>  true
+            case "false" => false
+            case _ => throw new IllegalArgumentException("--p can have only true or false value")
+          }
+
+      case "--f" =>
+        try f = arg.substring(4,arg.length).toInt catch {
+          case e : NumberFormatException => throw new IllegalArgumentException("--f can have only integer values")
+        }
+
+      case "--q" => q = arg.substring(4,arg.length)
+
+      case _ => throw new IllegalArgumentException("Errors on arguments")
+
+    } )
+
+    (p,f,q)
+
+  }
+
+
 
  def main(args: Array[String]): Unit = {
 
@@ -207,74 +247,28 @@ object ServiceMain {
    var tokenizedPreprocessedDB: DataFrame = null
    var idTitleTextDB: DataFrame = null
 
-   println("args => ")
-   args.foreach( x => print(" " +x))
+   val (prep,numfile,query) = check_and_getArgues(args)
 
-   def checkandgetArgue(commands: Array[String]) = {
-
-     //ci devono essere 3 comandi se non ci sono questi 3 la query non può continuare.
-     //il modello corretto di query sarebbe
-     // --preprocess=true/false --numFile=N --query=""
-     var prep: Boolean = null
-     val prepIndex = commands.indexOf("--preprocess=")
-
-     prepIndex match {
-       case -1 => throw new IllegalArgumentException("--preprocess command is missing")
-       case _=>  prep = commands(prepIndex+1) match {
-           case "true" => true
-           case "false" =>false
-           case _ =>  throw new IllegalArgumentException("--preprocess can have only boolean value")
-         }
-     }
-
-     val nfIndex = commands.indexOf("--numFile=")
-     var numfile: Int = null
-
-     nfIndex match {
-       case -1 => throw new IllegalArgumentException("--numFile command is missing")
-       case _ => numfile = commands(nfIndex+1) match {
-         case value => try value.toInt
-             catch{
-               case ClassCastException =>  throw new IllegalArgumentException("--numFile can have only integer value ")
-             }
-       }
-     }
-
-     val queryIndex = commands.indexOf("--query=")
-     var query : String = null
-     queryIndex match {
-       case -1 => throw new IllegalArgumentException("--query command is missing")
-       case _ => query = commands(queryIndex+1) match {
-         //case "the query value is a words inside the upper quotes"
-       //case _ =>  throw new IllegalArgumentException("--query can have only a sentence between upper quotes \" \" ")
-         
-       }
-     }
+   println("prep value is => "+ prep)
+   println("numfile value is => "+ numfile)
+   println("query value is => "+query)
 
 
-
-     (prep,numfile,query)
-   }
-
-
-
-   //SPLIT ARGS
-   //if check is necessary to avoid null pointer exception
-   val (command,query) = if(args.length > 2 ) args.splitAt(2) else new Array[String](2) -> new Array[String](0)
-
-   /* JSON TO DF  */
-   (command(0), command(1) )match {
-     case ("--preprocess","false") => {
-       // READ PREPROCESSED DB
-       tokenizedPreprocessedDB = readPreprocessedDBFromJson(pathOfWikiClean, spark)
-       idTitleTextDB = readPreprocessedDBFromJson(pathOfIdTitleTextDB, spark)
-
-     }
-     case ("--preprocess","true")  => {
+   prep match {
+       
+     case true => {
        // PREPROCESS DB and WRITE IT on S3
-       val fullDB = readFullDBFromJson(whereReadingDB + "wikiSplitted_3.json", spark)
-       val toBePreprocessedDB = fullDB(0)
-       idTitleTextDB = fullDB(1)
+       //io ho numFile da leggere e può essere un valore che è almeno 1 QUINDI IN SCALA LIKE FACCIO
+       var toBePreprocessedDB : DataFrame = null
+       var idTitleTextDB: DataFrame = null
+       var i = 1;
+
+       while (i < numfile+2){
+         val (a, b) = readFullDBFromJson(whereReadingDB + "wikiSplitted_"+i+".json", spark)
+         toBePreprocessedDB = toBePreprocessedDB.unionByName( a ); //non mi piace per niente questa riga di codice [Salvo]
+         idTitleTextDB = idTitleTextDB.unionByName( b ) //non mi piace per niente questa riga di codice [Salvo]
+         i = i+1
+       }
 
        //PREPROCESS FULL DB
        val preProcessData = new DataPreprocessing(toBePreprocessedDB)
@@ -291,19 +285,22 @@ object ServiceMain {
        renameDBFile("idTitleTextDB.json", wherePutOutput+"idTitleTextDB/", "scpmarysal", "us-east-1") //?
      }
 
-     case _ => throw new IllegalArgumentException("--preprocess is missing or was not recognized with value true or false")
+     case false =>  {
+       // READ PREPROCESSED DB
+       tokenizedPreprocessedDB = readPreprocessedDBFromJson(pathOfWikiClean, spark)
+       idTitleTextDB = readPreprocessedDBFromJson(pathOfIdTitleTextDB, spark)
+     }
+
    }
 
-   val userInput = query.reduce((x, y) => x + " " + y)
-
-   val seqQuery = Seq((0, userInput))
+   val seqQuery = Seq((0, query))
    val queryDF = spark.createDataFrame(seqQuery).toDF("id", "content")
    val dbQuery = new DataPreprocessing(queryDF).preProcessDF()
    val queryKeyword = dbQuery.select("words_clean").collect()
    val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
 
    val preProcessedRDD = fromDFtoRDD(sc,tokenizedPreprocessedDB)
-   //preProcessedRDD.take(10).foreach( x=> println( x._1.toString + " --- "+x._2.toString ))
+
    time(block_of_code(preProcessedRDD, idTitleTextDB, myQuery, spark), spark, "TotalExec")
 
    // END OFFICIAL VERSION
@@ -417,3 +414,42 @@ case class SimpleTuple(idOfTheDoc: Long, value: Double) {
  override def toString: String = this.idOfTheDoc + ",\t" + this.value
  def compareTo(x: SimpleTuple) = this.value - x.value
 }
+
+
+/*
+    var prep: Boolean = false
+    val prepIndex = commands.indexOf("--preprocess=")
+
+    prepIndex match {
+      case -1 => throw new IllegalArgumentException("--preprocess command is missing")
+      case _=>  prep = commands(prepIndex+1) match {
+        case "true" => true
+        case "false" =>false
+        case _ =>  throw new IllegalArgumentException("--preprocess can have only boolean value")
+      }
+    }
+
+    val nfIndex = commands.indexOf("--numFile=")
+    var numfile: Int = -1
+
+    nfIndex match {
+      case -1 => throw new IllegalArgumentException("--numFile command is missing")
+      case _ => numfile = commands(nfIndex+1) match {
+        case value => try value.toInt
+        catch{
+          case e : ClassCastException =>  throw new IllegalArgumentException("--numFile can have only an integer value ")
+        }finally -1
+      }
+    }
+
+    val queryIndex = commands.indexOf("--query=")
+    var query : String = null
+    queryIndex match {
+      case -1 => throw new IllegalArgumentException("--query command is missing")
+      case _ => query = commands(queryIndex+1) match {
+        //case "the query value is a words inside the upper quotes"
+        case _ =>  throw new IllegalArgumentException("--query can have only a sentence between upper quotes \" \" ")
+
+      }
+    }
+*/
