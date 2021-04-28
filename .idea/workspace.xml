@@ -28,10 +28,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8180e5b5-457a-481a-ad13-34cc5c3d1ec0" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.bsp/sbt.json" beforeDir="false" afterPath="$PROJECT_DIR$/.bsp/sbt.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules/SCP-Project-build.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules/SCP-Project-build.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/scala/ParOkapiBM25.scala" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/scala/ParOkapiBM25.scala" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/scala/ServiceMain.scala" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/scala/ServiceMain.scala" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/scala/Sorting.scala" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/scala/Sorting.scala" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -145,7 +146,7 @@
       <option name="javaOptions" value="-Djline.terminal=NONE" />
       <option name="myConsoleArgs" value="" />
       <option name="selectedOptions">
-        <list />
+        <set />
       </option>
       <option name="workingDirectory" value="$PROJECT_DIR$" />
       <method v="2">

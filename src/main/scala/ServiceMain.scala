@@ -35,9 +35,7 @@ object ServiceMain {
    */
   //AWS
   //la prima viene usata nel preprocess quando viene letto uno degli n file.
-  //val whereReadingDB = "s3://scpsalmary/inputFiles/"
-  val whereReadingDB = "s3://scpmarysal/inputFiles/"
-
+  val whereReadingDB = "s3://scpsalmary/inputFiles/"
 
   //la seconda viene usata ogni volta che si scrive sul bucket.: si scrive in 3 occasioni e tutti usano wherePutOutput come root.
   //1. alla fine del preprocess per salvare le rdd preprocessate
@@ -45,12 +43,11 @@ object ServiceMain {
   //3. infine l'ultima scrittura genera file che però non vengono rinominati ed è l'output finale
 
 
-  //val wherePutOutput = "s3://scpsalmary/"
-  val wherePutOutput = "s3://scpmarysal/"
+  val wherePutOutput = "s3://scpsalmary/"
 
   //queste ultime due sono i path che vengono usati per leggere i dati in caso in cui si evita il preprocess
-  val pathOfWikiClean = wherePutOutput + "wikiclean.json"
-  val pathOfIdTitleTextDB =  wherePutOutput + "idTitleTextDB.json"
+  val pathOfWikiClean = wherePutOutput + "wikidb/"+"wikiclean.json"
+  val pathOfIdTitleTextDB =  wherePutOutput+"idTitleTextDB/"+"idTitleTextDB.json"
 
   /*
   *  !!!!!!!!!!!!! considerazioni da dire a marianna !!!!!!!!1
@@ -88,7 +85,7 @@ object ServiceMain {
 
    }
  */
-/*
+
  def generateOutput(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
    val df = idTitleTextDB.collect().par
    val mapsource = source.map( x=> (x.idOfTheDoc, x.value) ).toMap.par
@@ -109,7 +106,7 @@ object ServiceMain {
 
   val x = res.filterNot( x => x == (0,0.0,"","") );
    x
- } */
+ }
 
  def generateParDF(idTitleTextDB: DataFrame, source: Array[(Int,Double)], spark: SparkSession) = {
 
@@ -248,7 +245,6 @@ object ServiceMain {
   // OFFICIAL VERSION
    var tokenizedPreprocessedDB: DataFrame = null
    var idTitleTextDB: DataFrame = null
-   var toBePreprocessedDB: DataFrame = null
 
    val (prep,numfile,query) = check_and_getArgues(args)
 
@@ -262,9 +258,7 @@ object ServiceMain {
      case true => {
        // PREPROCESS DB and WRITE IT on S3
        //io ho numFile da leggere e può essere un valore che è almeno 1 QUINDI IN SCALA LIKE FACCIO
-      var tempFullDB = readFullDBFromJson ( whereReadingDB + "wikiSplitted_1.json", spark )
-      toBePreprocessedDB = tempFullDB._1
-       idTitleTextDB = tempFullDB._2
+       var (toBePreprocessedDB, idTitleTextDB) = readFullDBFromJson ( whereReadingDB + "wikiSplitted_1.json", spark )
 
        var i = 2;
        while (i <= numfile){
@@ -285,8 +279,8 @@ object ServiceMain {
 
        //RENAME DB FILE
        //renameDBFile("wikiclean.json",  "preprocessedDB/", "scpmarysal", "us-east-1") //? non torna preprocessedDB
-       renameDBFile("wikiclean.json", "wikidb/", "scpmarysal", "us-east-1") //? non torna il preprocessedDB preprocessedDB
-       renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpmarysal", "us-east-1") //?
+       renameDBFile("wikiclean.json", "wikidb/", "scpsalmary", "us-east-1") //? non torna il preprocessedDB preprocessedDB
+       renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpsalmary", "us-east-1") //?
      }
 
      case false =>  {
@@ -413,6 +407,12 @@ object ServiceMain {
  }
 
 }
+
+case class SimpleTuple(idOfTheDoc: Long, value: Double) {
+ override def toString: String = this.idOfTheDoc + ",\t" + this.value
+ def compareTo(x: SimpleTuple) = this.value - x.value
+}
+
 
 /*
     var prep: Boolean = false
