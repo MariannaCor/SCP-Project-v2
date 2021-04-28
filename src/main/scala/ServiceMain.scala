@@ -25,29 +25,28 @@ object ServiceMain {
   val pathWikiDB = "wikidb.json"
   val pathOutput = "outputTests/"
   */
-
+/*
   // LOCAL SAL
- /* val whereReadingDB = "C:\\Users\\Salvo\\GitHub\\data\\jsonFiles\\"
+  val whereReadingDB = "C:\\Users\\Salvo\\GitHub\\data\\jsonFiles\\50\\"
   val wherePutOutput = "outputFolder\\"
   val pathOfWikiClean = wherePutOutput + "wikidb\\"+"wikiclean.json"
   val pathOfIdTitleTextDB =  wherePutOutput+"idTitleTextDB\\"+"idTitleTextDB.json"
- */
 
+   */
   //AWS
   //la prima viene usata nel preprocess quando viene letto uno degli n file.
-  val whereReadingDB = "s3://sal1/"
+  val whereReadingDB = "s3://scpsalmary/"
 
   //la seconda viene usata ogni volta che si scrive sul bucket.: si scrive in 3 occasioni e tutti usano wherePutOutput come root.
   //1. alla fine del preprocess per salvare le rdd preprocessate
   //2. si rinominano i file dopo la loro creazione dando come indirizzo quello che poi genera path of WikiClean e IdTitleTextDB
   //3. infine l'ultima scrittura genera file che però non vengono rinominati ed è l'output finale
 
-  val wherePutOutput = "s3://sal1/outputFolder/"
+  val wherePutOutput = "s3://scpsalmary/outputFolder/"
 
   //queste ultime due sono i path che vengono usati per leggere i dati in caso in cui si evita il preprocess
   val pathOfWikiClean = wherePutOutput + "wikidb/"+"wikiclean.json"
   val pathOfIdTitleTextDB =  wherePutOutput+"idTitleTextDB/"+"idTitleTextDB.json"
-
 
   /*
   *  !!!!!!!!!!!!! considerazioni da dire a marianna !!!!!!!!1
@@ -57,7 +56,6 @@ object ServiceMain {
   *  --numFile=3 per esempio per poter leggere 3 file.
   *
   * */
-
   /*
  val path = "s3://scpmarysal/"
  val pathWikiClean = path+"wikiclean.json"
@@ -238,7 +236,7 @@ object ServiceMain {
 
  def main(args: Array[String]): Unit = {
 
-   val conf = new SparkConf().setAppName(this.getClass.getName).setMaster("local[*]")
+   val conf = new SparkConf().setAppName(this.getClass.getName)//.setMaster("local[*]")
    val spark: SparkSession = SparkSession.builder.config(conf).getOrCreate()
    spark.sparkContext.setLogLevel("WARN")
    val sc = spark.sqlContext.sparkContext
@@ -255,15 +253,14 @@ object ServiceMain {
 
 
    prep match {
-       
+
      case true => {
        // PREPROCESS DB and WRITE IT on S3
        //io ho numFile da leggere e può essere un valore che è almeno 1 QUINDI IN SCALA LIKE FACCIO
-       var toBePreprocessedDB : DataFrame = null
-       var idTitleTextDB: DataFrame = null
-       var i = 1;
+       var (toBePreprocessedDB, idTitleTextDB) = readFullDBFromJson ( whereReadingDB + "wikiSplitted_1.json", spark )
 
-       while (i < numfile+2){
+       var i = 2;
+       while (i <= numfile){
          val (a, b) = readFullDBFromJson(whereReadingDB + "wikiSplitted_"+i+".json", spark)
          toBePreprocessedDB = toBePreprocessedDB.unionByName( a ); //non mi piace per niente questa riga di codice [Salvo]
          idTitleTextDB = idTitleTextDB.unionByName( b ) //non mi piace per niente questa riga di codice [Salvo]
