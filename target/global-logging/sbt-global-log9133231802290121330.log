@@ -1,0 +1,8 @@
+[debug] > Exec(package, None, None)
+[debug] Evaluating tasks: Compile / package
+[debug] Running task... Cancel: Signal, check cycles: false, forcegc: true
+[warn] There may be incompatibilities among your library dependencies; run 'evicted' to see detailed eviction warnings.
+[info] compiling 8 Scala sources to C:\Users\Salvo\GitHub\SCP-Project-v2\target\scala-2.12\classes ...
+[info] done compiling
+[success] Total time: 9 s, completed Apr 28, 2021 5:41:59 PM
+[debug] > Exec(idea-shell, None, None)

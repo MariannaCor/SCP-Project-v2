@@ -35,14 +35,15 @@ object ServiceMain {
    */
   //AWS
   //la prima viene usata nel preprocess quando viene letto uno degli n file.
-  val whereReadingDB = "s3://scpsalmary/"
+  val whereReadingDB = "s3://scpsalmary/inputFiles/"
 
   //la seconda viene usata ogni volta che si scrive sul bucket.: si scrive in 3 occasioni e tutti usano wherePutOutput come root.
   //1. alla fine del preprocess per salvare le rdd preprocessate
   //2. si rinominano i file dopo la loro creazione dando come indirizzo quello che poi genera path of WikiClean e IdTitleTextDB
   //3. infine l'ultima scrittura genera file che però non vengono rinominati ed è l'output finale
 
-  val wherePutOutput = "s3://scpsalmary/outputFolder/"
+
+  val wherePutOutput = "s3://scpsalmary/"
 
   //queste ultime due sono i path che vengono usati per leggere i dati in caso in cui si evita il preprocess
   val pathOfWikiClean = wherePutOutput + "wikidb/"+"wikiclean.json"
@@ -273,13 +274,13 @@ object ServiceMain {
 
        //WRITE PREPROCESSED DBs TO A FILE
        //lo mette dentro la cartella idTitleTextDB al percorso
-       idTitleTextDB.write.mode("overwrite").format("json").save(wherePutOutput + "idTitleTextDB")
-       tokenizedPreprocessedDB.write.mode("overwrite").format("json").save(wherePutOutput + "wikidb")
+       idTitleTextDB.coalesce(1).write.mode("overwrite").format("json").save(wherePutOutput + "idTitleTextDB")
+       tokenizedPreprocessedDB.coalesce(1).write.mode("overwrite").format("json").save(wherePutOutput + "wikidb")
 
        //RENAME DB FILE
        //renameDBFile("wikiclean.json",  "preprocessedDB/", "scpmarysal", "us-east-1") //? non torna preprocessedDB
-       renameDBFile("wikiclean.json", wherePutOutput + "wikidb/", "scpmarysal", "us-east-1") //? non torna il preprocessedDB preprocessedDB
-       renameDBFile("idTitleTextDB.json", wherePutOutput+"idTitleTextDB/", "scpmarysal", "us-east-1") //?
+       renameDBFile("wikiclean.json", "wikidb/", "scpsalmary", "us-east-1") //? non torna il preprocessedDB preprocessedDB
+       renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpsalmary", "us-east-1") //?
      }
 
      case false =>  {
@@ -298,7 +299,7 @@ object ServiceMain {
 
    val preProcessedRDD = fromDFtoRDD(sc,tokenizedPreprocessedDB)
 
-   time(block_of_code(preProcessedRDD, idTitleTextDB, myQuery, spark), spark, "TotalExec")
+   time(block_of_code(preProcessedRDD, idTitleTextDB, myQuery, spark), spark, "TotalExec with "+numfile+" files")
 
    // END OFFICIAL VERSION
 
@@ -341,7 +342,6 @@ object ServiceMain {
  def renameDBFile(newfileName: String, folder: String, bucketName: String, clientRegion: String): Unit = {
 
    val s3 = AmazonS3ClientBuilder.standard.withRegion(clientRegion).build
-
    val x = s3.listObjectsV2(bucketName, folder)
    val y = x.getObjectSummaries()
 
@@ -349,13 +349,14 @@ object ServiceMain {
      val fileName = r.getKey
      if (fileName.contains("part-"))
        s3.copyObject(bucketName, fileName, bucketName, newfileName)
+
      s3.deleteObject(bucketName, fileName)
    })
 
    /*
-   val req = new PutObjectRequest("scpmarysal", "test", "test.json")
-   s3.putObject(req)
-*/
+    val req = new PutObjectRequest("scpmarysal", "test", "test.json")
+    s3.putObject(req)
+   */
 
    /*
    s3.putObject("scpmarysal", "test", "test.json")
