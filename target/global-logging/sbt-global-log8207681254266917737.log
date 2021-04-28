@@ -1,0 +1,13 @@
+[debug] > Exec(clean ; package, None, None)
+[debug] > Exec(clean, None, None)
+[debug] Evaluating tasks: clean
+[debug] Running task... Cancel: Signal, check cycles: false, forcegc: true
+[success] Total time: 0 s, completed Apr 28, 2021 8:02:16 PM
+[debug] > Exec(package, None, None)
+[debug] Evaluating tasks: Compile / package
+[debug] Running task... Cancel: Signal, check cycles: false, forcegc: true
+[warn] There may be incompatibilities among your library dependencies; run 'evicted' to see detailed eviction warnings.
+[info] compiling 7 Scala sources to C:\unibo-installations\SCP-Project\SCP-Project\target\scala-2.12\classes ...
+[info] done compiling
+[success] Total time: 29 s, completed Apr 28, 2021 8:02:45 PM
+[debug] > Exec(idea-shell, None, None)
