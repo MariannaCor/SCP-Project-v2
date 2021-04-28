@@ -86,6 +86,7 @@ object ServiceMain {
    }
  */
 
+  /*
  def generateOutput(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
    val df = idTitleTextDB.collect().par
    val mapsource = source.map( x=> (x.idOfTheDoc, x.value) ).toMap.par
@@ -107,7 +108,7 @@ object ServiceMain {
   val x = res.filterNot( x => x == (0,0.0,"","") );
    x
  }
-
+*/
  def generateParDF(idTitleTextDB: DataFrame, source: Array[(Int,Double)], spark: SparkSession) = {
 
    /* TEMPO DI ESECUZIONE di questa FUNZIONE
@@ -118,10 +119,61 @@ object ServiceMain {
    idTitleTextDB.filter(col("id").isin(ids: _*))
  }
 
- def block_of_code(tokenizedPreprocessedDB: RDD[(Int, Array[String])], idTitleTextDB: DataFrame, myQuery: Array[String], sparkSession: SparkSession): Unit = {
+ def block_of_code(args: Array[String], spark: SparkSession, sc: SparkContext): Unit = {
 
-  // tokenizedPreprocessedDB.show(false)
-   val okapi = new ParOkapiBM25(tokenizedPreprocessedDB, myQuery)
+   // OFFICIAL VERSION
+   var tokenizedPreprocessedDB: DataFrame = null
+   var idTitleTextDB: DataFrame = null
+   var toBePreprocessedDB: DataFrame = null
+
+   val (prep,fileNumber,query) = check_and_getArgues(args)
+
+   println("prep value is => "+ prep)
+   println("fileNumber value is => "+ fileNumber)
+   println("query value is => "+query)
+
+
+   prep match {
+
+     case true => {
+       // PREPROCESS DB and WRITE IT on S3
+
+       val tempFullDB = readFullDBFromJson ( whereReadingDB + "wikidb"+fileNumber+".json", spark )
+       toBePreprocessedDB = tempFullDB._1
+       idTitleTextDB = tempFullDB._2
+
+       //PREPROCESS FULL DB
+       val preProcessData = new DataPreprocessing(toBePreprocessedDB)
+       tokenizedPreprocessedDB = preProcessData.preProcessDF()
+
+       //WRITE PREPROCESSED DBs TO A FILE
+       //lo mette dentro la cartella idTitleTextDB al percorso
+       idTitleTextDB.coalesce(1).write.mode("overwrite").format("json").save(wherePutOutput + "idTitleTextDB")
+       tokenizedPreprocessedDB.coalesce(1).write.mode("overwrite").format("json").save(wherePutOutput + "wikidb")
+
+       //RENAME DB FILE
+       //renameDBFile("wikiclean.json",  "preprocessedDB/", "scpmarysal", "us-east-1") //? non torna preprocessedDB
+       renameDBFile("wikiclean.json", "wikidb/", "scpmarysal", "us-east-1") //? non torna il preprocessedDB preprocessedDB
+       renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpmarysal", "us-east-1") //?
+     }
+
+     case false =>  {
+       // READ PREPROCESSED DB
+       tokenizedPreprocessedDB = readPreprocessedDBFromJson(pathOfWikiClean, spark)
+       idTitleTextDB = readPreprocessedDBFromJson(pathOfIdTitleTextDB, spark)
+     }
+
+   }
+
+   val seqQuery = Seq((0, query))
+   val queryDF = spark.createDataFrame(seqQuery).toDF("id", "content")
+   val dbQuery = new DataPreprocessing(queryDF).preProcessDF()
+   val queryKeyword = dbQuery.select("words_clean").collect()
+   val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
+
+   val preProcessedRDD = fromDFtoRDD(sc,tokenizedPreprocessedDB)
+
+   val okapi = new ParOkapiBM25(preProcessedRDD, myQuery)
    val scores: RDD[(Int, Double)] = okapi.getBM25()
 
    //val scoresArray = scores.collect()
@@ -133,7 +185,7 @@ object ServiceMain {
    val n = 10
    lazy val firstN = scores.top(n)( PairOrdering ); //fa il contrario di take ordering e torna i primi 10 con score più alto direttamente dalle RDD.. consuma molto meno memoria sul driver.
    firstN map (println(_))
-   lazy val result = generateParDF(idTitleTextDB, firstN, sparkSession)
+   lazy val result = generateParDF(idTitleTextDB, firstN, spark)
    //lazy val result = generateOutput(idTitleTextDB, firstN, sparkSession).seq
    //sc.parallelize(result).coalesce(1).saveAsTextFile("outputTests/output");
    result.coalesce(1).write.mode("overwrite").format("json").save(wherePutOutput+"/output")
@@ -185,7 +237,8 @@ object ServiceMain {
  * */
  //def fromDFtoRDD[T](sc: SparkContext, tokenizedPreprocessedDB: DataFrame) : RDD[T] = { volevo farla in questo modo vedi dopo come fare}
  def fromDFtoRDD(sc: SparkContext, tokenizedPreprocessedDB: DataFrame) =
-   sc.parallelize(  tokenizedPreprocessedDB.collect() )
+   //sc.parallelize(  tokenizedPreprocessedDB.collect() )
+    tokenizedPreprocessedDB.rdd
      .map( row => (
        row.getLong(0).toInt,
        row.get(1).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
@@ -242,59 +295,7 @@ object ServiceMain {
    spark.sparkContext.setLogLevel("WARN")
    val sc = spark.sqlContext.sparkContext
 
-  // OFFICIAL VERSION
-   var tokenizedPreprocessedDB: DataFrame = null
-   var idTitleTextDB: DataFrame = null
-   var toBePreprocessedDB: DataFrame = null
-
-   val (prep,fileNumber,query) = check_and_getArgues(args)
-
-   println("prep value is => "+ prep)
-   println("fileNumber value is => "+ fileNumber)
-   println("query value is => "+query)
-
-
-   prep match {
-
-     case true => {
-       // PREPROCESS DB and WRITE IT on S3
-
-       val tempFullDB = readFullDBFromJson ( whereReadingDB + "wikidb"+fileNumber+".json", spark )
-       toBePreprocessedDB = tempFullDB._1
-       idTitleTextDB = tempFullDB._2
-
-       //PREPROCESS FULL DB
-       val preProcessData = new DataPreprocessing(toBePreprocessedDB)
-       tokenizedPreprocessedDB = preProcessData.preProcessDF()
-
-       //WRITE PREPROCESSED DBs TO A FILE
-       //lo mette dentro la cartella idTitleTextDB al percorso
-       idTitleTextDB.coalesce(1).write.mode("overwrite").format("json").save(wherePutOutput + "idTitleTextDB")
-       tokenizedPreprocessedDB.coalesce(1).write.mode("overwrite").format("json").save(wherePutOutput + "wikidb")
-
-       //RENAME DB FILE
-       //renameDBFile("wikiclean.json",  "preprocessedDB/", "scpmarysal", "us-east-1") //? non torna preprocessedDB
-       renameDBFile("wikiclean.json", "wikidb/", "scpmarysal", "us-east-1") //? non torna il preprocessedDB preprocessedDB
-       renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "scpmarysal", "us-east-1") //?
-     }
-
-     case false =>  {
-       // READ PREPROCESSED DB
-       tokenizedPreprocessedDB = readPreprocessedDBFromJson(pathOfWikiClean, spark)
-       idTitleTextDB = readPreprocessedDBFromJson(pathOfIdTitleTextDB, spark)
-     }
-
-   }
-
-   val seqQuery = Seq((0, query))
-   val queryDF = spark.createDataFrame(seqQuery).toDF("id", "content")
-   val dbQuery = new DataPreprocessing(queryDF).preProcessDF()
-   val queryKeyword = dbQuery.select("words_clean").collect()
-   val myQuery = queryKeyword(0).get(0).asInstanceOf[mutable.WrappedArray[String]].toArray[String]
-
-   val preProcessedRDD = fromDFtoRDD(sc,tokenizedPreprocessedDB)
-
-   time(block_of_code(preProcessedRDD, idTitleTextDB, myQuery, spark), spark, "TotalExec with "+fileNumber+" files")
+   time(block_of_code(args,spark,sc), spark, "TotalExec")
 
    // END OFFICIAL VERSION
 
