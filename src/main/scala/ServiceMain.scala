@@ -58,7 +58,7 @@ object ServiceMain {
     println ( "query value is => " + query )
 
     wherePutOutput = file_path +"\\output\\"
-    whereReadingDB = file_path + "\\input5\\6690\\k\\500\\250"
+    whereReadingDB = file_path + "\\input"
 
     prep match {
       case true => {
