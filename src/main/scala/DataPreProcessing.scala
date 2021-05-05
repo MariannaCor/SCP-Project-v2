@@ -1,4 +1,6 @@
+import org.apache.spark.SparkContext
 import org.apache.spark.ml.feature.{StopWordsRemover, Tokenizer}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 
@@ -6,12 +8,11 @@ import org.apache.spark.sql.functions._
 class DataPreprocessing(private var df: DataFrame )  {
 
   def preProcessDF() : DataFrame = {
-    println("schema of preprocess is")
-    df.printSchema()
 
     val cleanedDF = removePuntuaction()
     val tokenizedDF = tokenize(cleanedDF)
     removeStopWords(tokenizedDF)
+
   }
 
   def setDF(newDF: DataFrame) : Unit= {
@@ -19,8 +20,8 @@ class DataPreprocessing(private var df: DataFrame )  {
   }
 
   //return sentenceDF_clean
-  private def removePuntuaction() : DataFrame = {
-    df.select(col("id"), lower(regexp_replace(col("content"), "[^a-zA-Z\\s]", "")).alias("text"))
+  private def removePuntuaction(): DataFrame = {
+    df.select(col("id"), lower(regexp_replace(col("content"), "[^a-zA-Z\\s]","")).alias("text"))
   }
 
   private def tokenize(df: DataFrame) : DataFrame = {

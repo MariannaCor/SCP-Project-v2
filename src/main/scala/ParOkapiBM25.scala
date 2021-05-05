@@ -121,9 +121,8 @@ def getBM25() :  RDD[(Int, Double)]  = {
     println(s"id = ${row._1} | score = ${row._2} ")
   })
 */
-  // docLengths.foreachPartition()
 
- //id , array (key,1)
+  //id , array (key,1)
   // id, key, 1
   // id, key, 1
   // id, key, 1
