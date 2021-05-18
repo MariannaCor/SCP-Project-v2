@@ -5,43 +5,20 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
 
-//DONE: pre processing db con flag.
-//TODO: data pre processing versione RDD.(M)
-//DONE: rinominare il file programmaticamente.
-//DONE: 1. sorting decrescente e take n 2.(DONE) output finale con titolo e testo dei primi n file trovati. (S) (DONE)
-//DONE: lettura del DB da file s3.
-
-
 object ServiceMain {
 
-  // LOCAL MARY
-  /*
-  val path = ""
-  val pathWikiClean = "wikiclean.json"
-  val pathIdTitleTextDB = "idTitleTextDB.json"
-  val pathWikiDB = "wikidb.json"
-  val pathOutput = "outputTests/"
-  */
-  // LOCAL SAL
-  //ARGS:: -o="C:\\Users\\Salvo\\GitHub\\SCP-Project-v2\\" -p=true -q="House buy and sell or rent"
-  //val whereReadingDB = "C:\\Users\\Salvo\\GitHub\\SCP-Project-v2\\input"
-  //val wherePutOutput = "C:\\Users\\Salvo\\GitHub\\SCP-Project-v2\\output"
-  //AWS
-  //la prima viene usata nel preprocess quando viene letto uno degli n file.
-  var whereReadingDB = "" //"s3://sal1/input"
-  var wherePutOutput = "" //s3://sal1/"
-  //val pathOfWikiClean = wherePutOutput +"wikiclean.json"
-  // val pathOfIdTitleTextDB =  wherePutOutput+"idTitleTextDB.json"
-
+  private var whereReadingDB = ""
+  private var wherePutOutput = ""
 
   def generateParDF(idTitleTextDB: DataFrame, source: Array[(Int, Double)], spark: SparkSession) = {
     /* TEMPO DI ESECUZIONE di questa FUNZIONE
      {"id":"ParDF","text":"Elapsed time: 259ms"}
      {"id":"ParDF","text":"Elapsed time: 0sec"}
     */
-    val ids = source.map ( el => el._1.toString )
+    def ids = source.map ( el => el._1.toString )
     idTitleTextDB.filter ( col ( "id" ).isin ( ids: _* ) )
   }
+
 
 
   def block_of_code(args: Array[String], spark: SparkSession, sc: SparkContext): Unit = {
@@ -51,71 +28,37 @@ object ServiceMain {
     var idTitleTextDB: DataFrame = null
     var toBePreprocessedDB: DataFrame = null
 
-    val (prep, file_path, query) = check_and_getArgues ( args )
+    val (prep, file_path, query, partitionNumber) = check_and_getArgues ( args )
 
-    println ( "prep value is => " + prep )
+    println ( "preprocessing value is => " + prep )
     println ( "filepath value is => " + file_path )
     println ( "query value is => " + query )
+    println ( "partition number is => "+partitionNumber )
 
-    wherePutOutput = file_path +"\\output\\"
-    whereReadingDB = file_path + "\\input"
+    wherePutOutput = file_path +"/output/"
+    whereReadingDB = file_path + "/input"
 
     prep match {
-      case true => {
+      case true  => {
+
         // PREPROCESS DB and WRITE IT on S3
         val tempFullDB = readFullDBFromJson ( whereReadingDB, spark )
-        toBePreprocessedDB = tempFullDB._1 repartitionByRange (partitionExprs = col ( "id" ))
-        idTitleTextDB = tempFullDB._2 repartitionByRange (partitionExprs = col ( "id" ))
+        toBePreprocessedDB = tempFullDB._1 repartition partitionNumber
+        idTitleTextDB = tempFullDB._2 repartition partitionNumber
 
         //PREPROCESS FULL DB
-        println("starting preprocessing")
         val preProcessData = new DataPreprocessing ( toBePreprocessedDB )
         tokenizedPreprocessedDB = preProcessData.preProcessDF()
 
         //WRITE PREPROCESSED DBs TO A FILE
-        println("finished preprocessing and starting to writing files" )
         idTitleTextDB.write.mode ( SaveMode.Overwrite ).format ( "json" ).save ( wherePutOutput + "idTitleTextDB/" )
-
-        /*
-        var i = 0;
-        tokenizedPreprocessedDB.foreach( row =>{
-          try {
-            synchronized{
-              print( i+ " id => ")
-              print(row.getLong( 0 ) )
-              print("\n\nval : "+ row.get( 1 ).asInstanceOf[mutable.WrappedArray[String]] )
-              println("")
-              i = i+1
-            }
-          }catch {
-            case e : Exception =>{
-              println("exception ********* =>"+e.getStackTrace )
-            }
-          }finally {
-            println("finally id => " + row.getLong(0))
-
-          }
-
-        }
-        )*/
-
-        tokenizedPreprocessedDB.write.mode ( SaveMode.Overwrite ).format ( "json" ).save ( wherePutOutput + "wikidb/" )
-
-        //RENAME DB FILE
-        //renameDBFile("wikiclean.json", "wikidb/", "sal1", "us-east-1") //? non torna il preprocessedDB preprocessedDB
-        //renameDBFile("idTitleTextDB.json", "idTitleTextDB/", "sal1", "us-east-1") //?
+        tokenizedPreprocessedDB.write mode ( SaveMode.Overwrite ) format ( "json" ) save ( wherePutOutput + "wikidb/" )
       }
-
       case false => {
-
         // READ PREPROCESSED DB
         tokenizedPreprocessedDB = readPreprocessedDBFromJson ( wherePutOutput + "wikidb/", spark )
         idTitleTextDB = readPreprocessedDBFromJson ( wherePutOutput + "idTitleTextDB/", spark )
-
-        //tokenizedPreprocessedDB =readPreprocessedDBFromJson(wherePutOutput + "wikidb", spark)
-        //idTitleTextDB = readPreprocessedDBFromJson(wherePutOutput + "idTitleTextDB", spark)
       }
-
     }
 
     val seqQuery = Seq ( (0, query) )
@@ -125,8 +68,7 @@ object ServiceMain {
     val myQuery = queryKeyword ( 0 ).get ( 0 ).asInstanceOf[mutable.WrappedArray[String]].toArray [String]
 
     val preProcessedRDD = fromDFtoRDD ( tokenizedPreprocessedDB )
-    println("starting caluclating okapiBM25 scores")
-    val okapi = new ParOkapiBM25 ( preProcessedRDD, myQuery )
+    val okapi = new OkapiBM25 ( preProcessedRDD, myQuery )
     val scores: RDD[(Int, Double)] = okapi.getBM25 ()
 
     object PairOrdering extends Ordering[(Int, Double)] {
@@ -136,17 +78,13 @@ object ServiceMain {
     val n = 10
     lazy val firstN = scores.top ( n )( PairOrdering ); //fa il contrario di take ordering e torna i primi 10 con score più alto direttamente dalle RDD.. consuma molto meno memoria sul driver.
     firstN map (println ( _ ))
-
     spark.createDataFrame ( firstN ).coalesce ( 1 ).write.mode ( "overwrite" ).format ( "json" ).save ( wherePutOutput + "/scores" )
 
     lazy val result = generateParDF ( idTitleTextDB, firstN, spark )
     result.write.mode ( "overwrite" ).format ( "json" ).save ( wherePutOutput + "/output" )
 
   }
-
   def readFullDBFromJson(path: String, spark: SparkSession) = {
-
-
     println ( "reading files at " + path )
 
     val dfDB = spark.read
@@ -155,7 +93,7 @@ object ServiceMain {
 
     println ( "number of gotten files is " + dfDB.count () )
 
-    val arrDB = dfDB.selectExpr ( "mediawiki.page" )
+    def arrDB = dfDB.selectExpr ( "mediawiki.page" )
     val tmpDF = arrDB.withColumn ( "page", explode ( col ( "page" ) ) )
 
     val dfToPreprocess = tmpDF.selectExpr ( "page.id", "page.revision.text.content" )
@@ -163,20 +101,8 @@ object ServiceMain {
 
     (dfToPreprocess, dfToOutput)
   }
+  def readPreprocessedDBFromJson(path: String, spark: SparkSession): DataFrame =  spark.read.json ( path )
 
-
-  def readPreprocessedDBFromJson(path: String, spark: SparkSession): DataFrame = {
-    val dfDB = spark.read
-      .json ( path )
-    dfDB
-  }
-
-  /*
- * @args param options example
- * -preprocess false/true keywords
- *
- * */
-  //def fromDFtoRDD[T](sc: SparkContext, tokenizedPreprocessedDB: DataFrame) : RDD[T] = { volevo farla in questo modo vedi dopo come fare}
   def fromDFtoRDD(tokenizedPreprocessedDB: DataFrame) =
     tokenizedPreprocessedDB.rdd
       .map ( row => (
@@ -184,17 +110,19 @@ object ServiceMain {
         row.get ( 1 ).asInstanceOf[mutable.WrappedArray[String]].toArray [String]
       ) )
 
-  /*
-    Ci sono 3 possibili valori da inserire. Se qualcuno manca vengono presi i parametri di default
-    esempio di un modello di args corretto
-    --preprocess=true/false --numFile=N --query="keyword1 keyword2 keyword3"
-   */
 
+  /*
+  * example of accepted arguments
+  * -f="C:\Users\Salvo\GitHub\SCP-Project-v2"  -p=true -q="House buy and sell"
+  * or
+  * -f="s3://mybucket/"  -p=true -q="House buy and sell"
+  * */
   def check_and_getArgues(commands: Array[String]) = {
 
     var preprocess: Boolean = false //default value
     var file_path: String = "" //default value
     var query: String = "" //default value
+    var partition: Int = 6 //default value
 
     commands.foreach ( arg =>
       arg.substring ( 0, 2 ) match {
@@ -204,50 +132,45 @@ object ServiceMain {
             case "false" => false
             case _ => throw new IllegalArgumentException ( "--p can have only true or false value" )
           }
-
         case "-f" => file_path = arg.substring ( 3, arg.length )
         case "-q" => query = arg.substring ( 3, arg.length )
+        case "-c" => try partition = arg.substring(3,arg.length).toInt catch {
+                      case _: NumberFormatException => throw new IllegalArgumentException("-c can have only integer values")
+                     }
         case _ => throw new IllegalArgumentException ( "Errors on arguments" )
-
       }
-
     )
 
-    (preprocess, file_path, query)
-
+    (preprocess, file_path, query, partition)
   }
 
   def main(args: Array[String]): Unit = {
 
-    val conf = new SparkConf ().setAppName ( this.getClass.getName ).setMaster ( "local[*]" )
+    val conf = new SparkConf().setAppName ( this.getClass.getName ).set("spark.cleaner.ttl","100000")//.setMaster ( "local[*]" )
     val spark: SparkSession = SparkSession.builder.config ( conf ).getOrCreate ()
     spark.sparkContext.setLogLevel ( "WARN" )
     val sc = spark.sqlContext.sparkContext
 
     time ( block_of_code ( args, spark, sc ), spark, "TotalExec" )
 
-    // END OFFICIAL VERSION
-
-    // TEST VERSION
+    //TEST VERSION
     /*
-    val testSenteces = Seq(
-      (1, Array("hi", "heard", "spark", "think", "spark", "beautiful")),
-      (2, Array("java", "java", "spark", "spark", "nosql", "sql")),
-      (3, Array("logistic", "regression", "models", "neat", "spark"))
-    )
+        val testSenteces = Seq(
+          (1, Array("hi", "heard", "spark", "think", "spark", "beautiful")),
+          (2, Array("java", "java", "spark", "spark", "nosql", "sql")),
+          (3, Array("logistic", "regression", "models", "neat", "spark"))
+        )
+        val preProcessed2DB = sc.parallelize(testSenteces)
 
-    val preProcessed2DB = sc.parallelize(testSenteces)
-
-    val myQuery =  Array("logistic", "safdsl", "regression" , "dsafkj", "models" ,"suca" ,"neat" ,"developed", "good" ,"nosql", "program")
-    //val myQuery = Array("spark", "java", "wow")
-   val idTitleTextDB = null
-   time(block_of_code(preProcessed2DB, idTitleTextDB, myQuery, spark), spark, "TotalExec")
-   // END TEST VERSION
-  */
+        val myQuery =  Array("logistic", "safdsl", "regression" , "dsafkj", "models" ,"suca" ,"neat" ,"developed", "good" ,"nosql", "program")
+        //val myQuery = Array("spark", "java", "wow")
+       val idTitleTextDB = null
+       time(block_of_code(preProcessed2DB, idTitleTextDB, myQuery, spark), spark, "TotalExec")
+       // END TEST VERSION
+    */
   }
 
   def time[R](block: => R, spark: SparkSession, name: String): R = {
-
     val t0 = System.nanoTime ()
     val result = block // call-by-name
     val t1 = System.nanoTime ()
@@ -260,9 +183,9 @@ object ServiceMain {
 
     val elapsedTimeSentenceDataFrame = spark.createDataFrame ( elapsedTimeSentence ).toDF ( "id", "text" )
     elapsedTimeSentenceDataFrame.coalesce ( 1 ).write.mode ( "overwrite" ).format ( "json" ).save ( wherePutOutput + "timeOutput" )
-
     result
   }
+
 }
 
 /*
@@ -377,7 +300,8 @@ case class SimpleTuple(idOfTheDoc: Long, value: Double) {
 
       }
     }
-*/ /*def readFullDBFromJsonOld(path: String, spark: SparkSession): Array[DataFrame] = {
+*/
+/*def readFullDBFromJsonOld(path: String, spark: SparkSession): Array[DataFrame] = {
 
    val dfDB = spark.read
      .option("multiline", "true")
@@ -393,7 +317,6 @@ case class SimpleTuple(idOfTheDoc: Long, value: Double) {
    arrDF
 
  }*/
-
 /*
   ReadXMLfromS3(spark: SparkSession, xmlFile: String): DataFrame = {
 
@@ -415,7 +338,6 @@ case class SimpleTuple(idOfTheDoc: Long, value: Double) {
 
  }
 */
-
 /*
 def generateOutput(idTitleTextDB: DataFrame, source: Array[SimpleTuple], spark: SparkSession) = {
  val df = idTitleTextDB.collect().par
