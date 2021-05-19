@@ -19,8 +19,6 @@ object ServiceMain {
     idTitleTextDB.filter ( col ( "id" ).isin ( ids: _* ) )
   }
 
-
-
   def block_of_code(args: Array[String], spark: SparkSession, sc: SparkContext): Unit = {
 
     // OFFICIAL VERSION
@@ -28,15 +26,16 @@ object ServiceMain {
     var idTitleTextDB: DataFrame = null
     var toBePreprocessedDB: DataFrame = null
 
-    val (prep, file_path, query, partitionNumber) = check_and_getArgues ( args )
+    val (prep, file_path, query, partitionNumber, in ) = check_and_getArgues ( args )
 
     println ( "preprocessing value is => " + prep )
     println ( "filepath value is => " + file_path )
     println ( "query value is => " + query )
     println ( "partition number is => "+partitionNumber )
+    println( "reading path input as bucket/input"+in)
 
     wherePutOutput = file_path +"/output/"
-    whereReadingDB = file_path + "/input"
+    whereReadingDB = file_path + "/input"+in
 
     prep match {
       case true  => {
@@ -123,25 +122,33 @@ object ServiceMain {
     var file_path: String = "" //default value
     var query: String = "" //default value
     var partition: Int = 6 //default value
-
-    commands.foreach ( arg =>
+    var input: String = ""
+    commands.foreach ( f = arg =>
       arg.substring ( 0, 2 ) match {
         case "-p" =>
           preprocess = arg.substring ( 3, arg.length ) match {
             case "true" => true
             case "false" => false
-            case _ => throw new IllegalArgumentException ( "--p can have only true or false value" )
+            case _ => throw new IllegalArgumentException ( "-p can have only true or false value" )
           }
         case "-f" => file_path = arg.substring ( 3, arg.length )
         case "-q" => query = arg.substring ( 3, arg.length )
-        case "-c" => try partition = arg.substring(3,arg.length).toInt catch {
-                      case _: NumberFormatException => throw new IllegalArgumentException("-c can have only integer values")
-                     }
+        case "-c" => try partition = arg.substring ( 3, arg.length ).toInt catch {
+          case _: NumberFormatException => throw new IllegalArgumentException ( "-c can have only integer values" )
+        }
+        case "-i" => {
+          val x: String = arg.substring ( 3, arg.length )
+          input = x match {
+            case "2" => x
+            case "3" => x
+            case _ => throw new IllegalArgumentException ( "-i can have only 2 or 3 values" )
+          }
+        }
         case _ => throw new IllegalArgumentException ( "Errors on arguments" )
       }
     )
 
-    (preprocess, file_path, query, partition)
+    (preprocess, file_path, query, partition, input)
   }
 
   def main(args: Array[String]): Unit = {
