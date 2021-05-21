@@ -1,6 +1,6 @@
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.{col, explode}
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
@@ -54,9 +54,21 @@ object ServiceMain {
         tokenizedPreprocessedDB.write mode ( SaveMode.Overwrite ) format ( "json" ) save ( wherePutOutput + "wikidb/" )
       }
       case false => {
-        // READ PREPROCESSED DB
+        // READ PREPROCESSED DB working code
         tokenizedPreprocessedDB = readPreprocessedDBFromJson ( wherePutOutput + "wikidb/", spark )
         idTitleTextDB = readPreprocessedDBFromJson ( wherePutOutput + "idTitleTextDB/", spark )
+
+        ///test version
+        /**idTitleTextDB = null;
+        val testSenteces = Seq(
+          (1L, Array("hi", "heard", "spark", "think", "spark", "beautiful")),
+          (2L, Array("java", "java", "spark", "spark", "nosql", "sql")),
+          (3L, Array("logistic", "regression", "models", "neat", "spark"))
+        )
+        val preProcessed2DB = sc.parallelize(testSenteces)
+        //val myQuery =  Array("logistic", "safdsl", "regression" , "dsafkj", "models" ,"suca" ,"neat" ,"developed", "good" ,"nosql", "program")
+        //to pas as args => -q ="spark java wow"
+        tokenizedPreprocessedDB = spark.createDataFrame(preProcessed2DB)*/
       }
     }
 
@@ -75,11 +87,11 @@ object ServiceMain {
     }
 
     val n = 10
-    lazy val firstN = scores.top ( n )( PairOrdering ); //fa il contrario di take ordering e torna i primi 10 con score più alto direttamente dalle RDD.. consuma molto meno memoria sul driver.
+    val firstN = scores.top ( n )( PairOrdering ); //fa il contrario di take ordering e torna i primi 10 con score più alto direttamente dalle RDD.. consuma molto meno memoria sul driver.
     firstN map (println ( _ ))
     spark.createDataFrame ( firstN ).coalesce ( 1 ).write.mode ( "overwrite" ).format ( "json" ).save ( wherePutOutput + "/scores" )
 
-    lazy val result = generateParDF ( idTitleTextDB, firstN, spark )
+    val result = generateParDF ( idTitleTextDB, firstN, spark )
     result.write.mode ( "overwrite" ).format ( "json" ).save ( wherePutOutput + "/output" )
 
   }
@@ -112,17 +124,15 @@ object ServiceMain {
 
   /*
   * example of accepted arguments
-  * -f="C:\Users\Salvo\GitHub\SCP-Project-v2"  -p=true -q="House buy and sell"
-  * or
-  * -f="s3://mybucket/"  -p=true -q="House buy and sell"
+  * -f="s3://mybucket/" -p=true -i=2 -c=48 -q="House buy and sell"
   * */
   def check_and_getArgues(commands: Array[String]) = {
 
     var preprocess: Boolean = false //default value
     var file_path: String = "" //default value
-    var query: String = "" //default value
-    var partition: Int = 6 //default value
-    var input: String = ""
+    var query: String = ""     //default value
+    var partition: Int = 6     //default value
+    var input: String = ""     //default value
     commands.foreach ( f = arg =>
       arg.substring ( 0, 2 ) match {
         case "-p" =>
@@ -153,28 +163,12 @@ object ServiceMain {
 
   def main(args: Array[String]): Unit = {
 
-    val conf = new SparkConf().setAppName ( this.getClass.getName ).set("spark.cleaner.ttl","100000")//.setMaster ( "local[*]" )
-    val spark: SparkSession = SparkSession.builder.config ( conf ).getOrCreate ()
+    def conf = new SparkConf().setAppName ( this.getClass.getName ).set("spark.cleaner.ttl","100000")//.setMaster ( "local[*]" )
+    lazy val spark: SparkSession = SparkSession.builder.config ( conf ).getOrCreate ()
+
     spark.sparkContext.setLogLevel ( "WARN" )
     val sc = spark.sqlContext.sparkContext
-
     time ( block_of_code ( args, spark, sc ), spark, "TotalExec" )
-
-    //TEST VERSION
-    /*
-        val testSenteces = Seq(
-          (1, Array("hi", "heard", "spark", "think", "spark", "beautiful")),
-          (2, Array("java", "java", "spark", "spark", "nosql", "sql")),
-          (3, Array("logistic", "regression", "models", "neat", "spark"))
-        )
-        val preProcessed2DB = sc.parallelize(testSenteces)
-
-        val myQuery =  Array("logistic", "safdsl", "regression" , "dsafkj", "models" ,"suca" ,"neat" ,"developed", "good" ,"nosql", "program")
-        //val myQuery = Array("spark", "java", "wow")
-       val idTitleTextDB = null
-       time(block_of_code(preProcessed2DB, idTitleTextDB, myQuery, spark), spark, "TotalExec")
-       // END TEST VERSION
-    */
   }
 
   def time[R](block: => R, spark: SparkSession, name: String): R = {
@@ -271,43 +265,6 @@ case class SimpleTuple(idOfTheDoc: Long, value: Double) {
 }
 
 */
-/*
-    var prep: Boolean = false
-    val prepIndex = commands.indexOf("--preprocess=")
-
-    prepIndex match {
-      case -1 => throw new IllegalArgumentException("--preprocess command is missing")
-      case _=>  prep = commands(prepIndex+1) match {
-        case "true" => true
-        case "false" =>false
-        case _ =>  throw new IllegalArgumentException("--preprocess can have only boolean value")
-      }
-    }
-
-    val nfIndex = commands.indexOf("--numFile=")
-    var numfile: Int = -1
-
-    nfIndex match {
-      case -1 => throw new IllegalArgumentException("--numFile command is missing")
-      case _ => numfile = commands(nfIndex+1) match {
-        case value => try value.toInt
-        catch{
-          case e : ClassCastException =>  throw new IllegalArgumentException("--numFile can have only an integer value ")
-        }finally -1
-      }
-    }
-
-    val queryIndex = commands.indexOf("--query=")
-    var query : String = null
-    queryIndex match {
-      case -1 => throw new IllegalArgumentException("--query command is missing")
-      case _ => query = commands(queryIndex+1) match {
-        //case "the query value is a words inside the upper quotes"
-        case _ =>  throw new IllegalArgumentException("--query can have only a sentence between upper quotes \" \" ")
-
-      }
-    }
-*/
 /*def readFullDBFromJsonOld(path: String, spark: SparkSession): Array[DataFrame] = {
 
    val dfDB = spark.read
@@ -322,7 +279,6 @@ case class SimpleTuple(idOfTheDoc: Long, value: Double) {
    arrDF(1) = tmpDF.selectExpr("page.id", "page.title", "page.revision.text.__text")
 
    arrDF
-
  }*/
 /*
   ReadXMLfromS3(spark: SparkSession, xmlFile: String): DataFrame = {

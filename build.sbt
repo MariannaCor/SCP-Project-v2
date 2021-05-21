@@ -8,7 +8,7 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "3.0.1",
   "org.apache.spark" %% "spark-sql" % "3.0.1",
   "org.apache.spark" %% "spark-mllib" % "3.0.1",
- "com.johnsnowlabs.nlp" %% "spark-nlp" % "3.0.1",
+ "com.johnsnowlabs.nlp" %% "spark-nlp" % "3.0.1"
  // "com.databricks" %% "spark-xml" % "0.12.0"
 /*  "org.apache.hadoop" %% "hadoop-aws" % "3.2.1",
   "org.apache.hadoop" %% "hadoop-common" % "3.2.1",
