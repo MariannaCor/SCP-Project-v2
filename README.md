@@ -67,13 +67,15 @@ It will generate a jar file named __scp-project_2.12-0.3.jar__ inside the direct
 The program can execute the following commands:
 - **-f** : bucket path.
 - **-c** : non-negative number of partition
-- **-p** : preprocess '''true/false'''. Note: it must be '''true''' the first time you run the program. 
+- **-p** : preprocess ```true/false```. Note: it must be ```true``` the first time you run the program. 
 - **-q** : input query. The stirng must be inside the double quotes ""
 
 For example: 
+
 ```
 spark-submit \
 -v \
 --deploy-mode cluster \
-scp-project_2.12-0.3.jar -f="s3://bucketname/" -c=112 -p=true -q="Victorian era"```
+scp-project_2.12-0.3.jar -f="s3://bucketname/" -c=112 -p=true -q="Victorian era"
+```
 
