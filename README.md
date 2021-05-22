@@ -1,6 +1,9 @@
 # DDR-BM25
 Distributed Doc Retrieval with Scala & Spark - Scalable and Cloud Programming project a.y. 2020/2021
 
+## Slides
+https://drive.google.com/file/d/1dum2WDp-WzHCz7Z0ehGurIlwIUNq2POR/view?usp=sharing
+
 ## Description
 DDR-BM25 is a distributed document retrieval based on OkapiBM25. The program matches a user query against a set of unstructured texts and shows the 10 most relevant documents for that query. 
 
