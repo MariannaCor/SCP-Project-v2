@@ -71,7 +71,8 @@ The program can execute the following commands:
 - **-q** : input query. The stirng must be inside the double quotes ""
 
 For example: 
-```spark-submit \
+```
+spark-submit \
 -v \
 --deploy-mode cluster \
 scp-project_2.12-0.3.jar -f="s3://bucketname/" -c=112 -p=true -q="Victorian era"```
