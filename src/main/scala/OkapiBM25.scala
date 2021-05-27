@@ -25,36 +25,33 @@ class OkapiBM25(dbRDD: RDD[(Int, Array[String])], q: Seq[String]) extends Serial
 
 def getBM25(): RDD[(Int, Double)]  = {
 
-  //unfoldToCountTF = RDD[((Int, Int, String), Int)]
   //(id, docLen, keyword,tf ) i.e.  ((1,6,spark) 2)
   val tf = dbRDD.flatMap(row => {
-    val x: Seq[((Int, Int, String), Int)] = q.map(keyword => {
-      if(row._2.indexOf(keyword) != -1)
-        ((row._1, row._2.length, keyword), row._2.filter(word => word == keyword).length)
-      else
-        ((row._1, row._2.length, keyword),0)
+    //Seq[((Int, Int, String), Int)] =
+  q.map(keyword => {
+      ((row._1, row._2.length, keyword), row._2.filter(word => word == keyword).length)
     })
-    x
   }).persist()
 
   //elem is (keword, df ) i.e. el = (keyword,1) if keyword occurs in 1 doc
-  val df = tf.filter( el => el._2 > 0).map( row =>  (row._1._3 , 1) ).reduceByKey(_+_) .persist()
+  //persist not needed because we already have a lazy approach so the computation starts in idf.collectAsMap()
+  val df = tf.filter( el => el._2 > 0).map( row =>  (row._1._3 , 1) ).reduceByKey(_+_)
 
-  val docLengths = dbRDD.map( row => {
-    ((row._1, 1),row._2.length)
-  }).persist()
-  //persist() is appropriate because we don't have to map 2 times after the two reduce operations used to calculate totLen and numberOfDocs
-  val totLen = docLengths.reduce( (x, y) => (x._1, x._2 + y._2) )._2
+  // ((docId,1),docLength). Persist to avoid two computations
+  val docLengths = tf.map( row => ((row._1._1, 1),row._1._2)).persist()
 
-  // alternative to docLengths.count() method
+  // alternative to docLengths.count() method.
   val numberOfDocs =  docLengths.reduce((x,y) => ((0, x._1._2 + y._1._2), 0))._1._2
-  val avg: Double = totLen.toDouble / numberOfDocs
+
+ //i.e. ( word = java , idf = 0.6931471805599453 )
+  val idf = df.map( tuple => (tuple._1, calcIDFFunc( tuple._2, numberOfDocs ) ) )
+  //df.mapValues(v => calcIDFFunc( v, numberOfDocs ))
 
   //we collect inside the master memory the entire rdd of idf because it is as the same size as the number of keyword of the query
-  //i.e. ( word = java , idf = 0.6931471805599453 )
-  val idf = df.map( tuple => (tuple._1, calcIDFFunc( tuple._2, numberOfDocs ) ) )
   val allIdf: collection.Map[String, Double] = idf.collectAsMap()
 
+  val totLen = docLengths.reduce( (x, y) => (x._1, x._2 + y._2) )._2
+  val avg: Double = totLen.toDouble / numberOfDocs
   // input tf el = ((docId, docLength, keyword), tf) then we added idf field
   val scores= tf.map(el => {
     ( el._1._1,
@@ -64,6 +61,7 @@ def getBM25(): RDD[(Int, Double)]  = {
   scores
 
 }
+
   private def calcIDFFunc(df: Double, size: Long): Double = {
     log((size.toDouble + 1) / (df + 1))
   }
